@@ -5,6 +5,7 @@ declare(strict_types=1);
 use DI\ContainerBuilder;
 use Slim\Factory\AppFactory;
 use Sstf\Api\Http\JsonErrorHandler;
+use Sstf\Api\Http\Middleware\AuthRateLimit;
 use Sstf\Api\Http\Middleware\SessionAuth;
 use Sstf\Api\Infrastructure\Sqlite\GlobalDb;
 
@@ -32,6 +33,7 @@ $logErrors = ($settings['app']['env'] ?? 'development') !== 'testing';
 $app->addBodyParsingMiddleware();
 $app->addRoutingMiddleware();
 $app->add($container->get(SessionAuth::class));
+$app->add($container->get(AuthRateLimit::class));
 $errorMiddleware = $app->addErrorMiddleware($debug, $logErrors, $debug);
 $errorMiddleware->setDefaultErrorHandler($container->get(JsonErrorHandler::class));
 

@@ -30,7 +30,9 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('settings-email')).toHaveTextContent('lifter@example.com');
     });
-    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('New password')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Current password')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Set password' })).toBeInTheDocument();
     expect(screen.getByRole('combobox')).toHaveValue('America/Chicago');
     expect(screen.getByRole('radio', { name: 'Pounds (lb)' })).toBeChecked();
 
@@ -155,5 +157,68 @@ describe('SettingsPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Invalid weight unit')).toBeInTheDocument();
     });
+  });
+
+  it('sets a password when none exists', async () => {
+    const saveMe = vi.fn(async () => ({
+      ok: true as const,
+      me: {
+        ...me,
+        identities: [{ provider: 'google' }, { provider: 'password' }],
+      },
+    }));
+    render(SettingsPage, {
+      props: {
+        loadMe: async () => ({ ok: true as const, me }),
+        saveMe,
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Set password' })).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Set password' }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Enter a password');
+    });
+    expect(saveMe).not.toHaveBeenCalled();
+
+    await fireEvent.input(screen.getByLabelText('New password'), { target: { value: 'gym-secret' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Set password' }));
+    await waitFor(() => {
+      expect(saveMe).toHaveBeenCalledWith({ password: 'gym-secret' });
+      expect(screen.getByTestId('password-status')).toHaveTextContent('Password saved');
+      expect(screen.getByRole('button', { name: 'Change password' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Current password')).toBeInTheDocument();
+    });
+  });
+
+  it('changes an existing password and surfaces API errors', async () => {
+    const withPassword: Me = {
+      ...me,
+      identities: [{ provider: 'google' }, { provider: 'password' }],
+    };
+    const saveMe = vi.fn(async () => ({
+      ok: false as const,
+      status: 400,
+      code: 'invalid_current_password',
+      message: 'Current password is incorrect',
+    }));
+    render(SettingsPage, {
+      props: {
+        loadMe: async () => ({ ok: true as const, me: withPassword }),
+        saveMe,
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Change password' })).toBeInTheDocument();
+    });
+    await fireEvent.input(screen.getByLabelText('Current password'), { target: { value: 'old' } });
+    await fireEvent.input(screen.getByLabelText('New password'), { target: { value: 'newer' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
+    await waitFor(() => {
+      expect(saveMe).toHaveBeenCalledWith({ password: 'newer', current_password: 'old' });
+      expect(screen.getByRole('alert')).toHaveTextContent('Current password is incorrect');
+    });
+    expect(screen.queryByTestId('password-status')).not.toBeInTheDocument();
   });
 });

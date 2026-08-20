@@ -7,6 +7,7 @@ namespace Sstf\Api\Http\Controllers;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Sstf\Api\Domain\EmailUnverifiedException;
+use Sstf\Api\Domain\InvalidCredentialsException;
 use Sstf\Api\Domain\InvalidGoogleIdTokenException;
 use Sstf\Api\Http\JsonResponder;
 use Sstf\Api\Infrastructure\Session\SessionService;
@@ -43,6 +44,29 @@ final class AuthController
             return JsonResponder::error('email_unverified', 'Email not verified', 401);
         } catch (InvalidGoogleIdTokenException) {
             return JsonResponder::error('invalid_token', 'Google sign-in failed', 401);
+        }
+
+        return JsonResponder::data($result['account']->toApi())
+            ->withAddedHeader('Set-Cookie', $this->sessions->setCookieHeader($result['cookie']));
+    }
+
+    public function password(Request $request, Response $response): Response
+    {
+        $body = $request->getParsedBody();
+        if (!is_array($body)) {
+            return JsonResponder::error('invalid_request', 'Sign-in failed', 400);
+        }
+
+        $email = $body['email'] ?? null;
+        $password = $body['password'] ?? null;
+        if (!is_string($email) || trim($email) === '' || !is_string($password) || $password === '') {
+            return JsonResponder::error('invalid_request', 'Sign-in failed', 400);
+        }
+
+        try {
+            $result = $this->auth->signInWithPassword($email, $password);
+        } catch (InvalidCredentialsException) {
+            return JsonResponder::error('invalid_credentials', 'Sign-in failed', 401);
         }
 
         return JsonResponder::data($result['account']->toApi())

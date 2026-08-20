@@ -232,7 +232,7 @@ All `/api/*` except auth endpoints require a valid session.
 | `POST` | `/api/auth/logout` | Clear session. |
 | `POST` | `/api/auth/password` | Phase 6. |
 | `GET` | `/api/me` | Account, identities, timezone, unit. |
-| `PATCH` | `/api/me` | Timezone, unit, later password. |
+| `PATCH` | `/api/me` | Timezone, unit, password (current password required if already set). |
 | `GET` | `/api/exercises` | Global catalog, `?q=` search. |
 | `POST` | `/api/exercises` | Add global exercise (unique name). |
 | `GET` | `/api/schedules` | All non-archived schedules + set counts. |

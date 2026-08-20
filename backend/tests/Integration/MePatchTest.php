@@ -108,4 +108,29 @@ final class MePatchTest extends HttpTestCase
         $this->assertSame(401, $response->getStatusCode());
         $this->assertSame('unauthenticated', $this->json($response)['error']['code']);
     }
+
+    public function testPatchSetsPasswordWithoutReturningTheHash(): void
+    {
+        $email = 'setpw-' . bin2hex(random_bytes(4)) . '@example.com';
+        $this->signIn($email);
+
+        $response = $this->request('PATCH', '/api/me', ['password' => 'gym-secret']);
+        $this->assertSame(200, $response->getStatusCode());
+        $payload = $this->json($response);
+        $this->assertArrayNotHasKey('password_hash', $payload['data']);
+        $providers = array_column($payload['data']['identities'], 'provider');
+        $this->assertContains('password', $providers);
+        $this->assertStringNotContainsString('gym-secret', (string) $response->getBody());
+
+        $badType = $this->request('PATCH', '/api/me', ['password' => 12]);
+        $this->assertSame(400, $badType->getStatusCode());
+        $this->assertSame('invalid_password', $this->json($badType)['error']['code']);
+
+        $badCurrentType = $this->request('PATCH', '/api/me', [
+            'password' => 'other',
+            'current_password' => false,
+        ]);
+        $this->assertSame(400, $badCurrentType->getStatusCode());
+        $this->assertSame('invalid_current_password', $this->json($badCurrentType)['error']['code']);
+    }
 }

@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchMe, patchMe, signInWithGoogle, signOut } from './auth';
-import { AUTH_ERROR_EMAIL_UNVERIFIED, AUTH_ERROR_GOOGLE_FAILED, messageForAuthCode } from './authErrors';
+import { fetchMe, hasPasswordIdentity, patchMe, signInWithGoogle, signInWithPassword, signOut } from './auth';
+import {
+  AUTH_ERROR_EMAIL_UNVERIFIED,
+  AUTH_ERROR_GOOGLE_FAILED,
+  AUTH_ERROR_RATE_LIMITED,
+  AUTH_ERROR_SIGN_IN_FAILED,
+  messageForAuthCode,
+  messageForPasswordCode,
+} from './authErrors';
 import {
   isLoginPath,
   loginRedirect,
@@ -27,6 +34,16 @@ describe('authErrors', () => {
     expect(messageForAuthCode(undefined)).toBe('Google sign-in failed');
     expect(messageForAuthCode('other')).toBe('Google sign-in failed');
     expect(messageForAuthCode('email_unverified')).not.toBe('Google sign-in failed');
+  });
+
+  it('maps password login codes without leaking credentials', () => {
+    expect(messageForPasswordCode('rate_limited')).toBe(AUTH_ERROR_RATE_LIMITED);
+    expect(messageForPasswordCode('rate_limited')).toBe('Too many attempts');
+    expect(messageForPasswordCode('invalid_credentials')).toBe(AUTH_ERROR_SIGN_IN_FAILED);
+    expect(messageForPasswordCode('invalid_credentials')).toBe('Sign-in failed');
+    expect(messageForPasswordCode(undefined)).toBe('Sign-in failed');
+    expect(messageForPasswordCode('other')).toBe('Sign-in failed');
+    expect(messageForPasswordCode('rate_limited')).not.toBe('Sign-in failed');
   });
 });
 
@@ -325,6 +342,105 @@ describe('auth client', () => {
     });
   });
 
+  it('signInWithPassword posts email and password', async () => {
+    const fetcher = vi.fn(async (path: string, init?: RequestInit) => {
+      expect(path).toBe('/api/auth/password');
+      expect(init?.method).toBe('POST');
+      expect(init?.credentials).toBe('include');
+      expect(init?.body).toBe(JSON.stringify({ email: 'a@b.com', password: 'secret' }));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => meBody,
+      } as Response;
+    });
+
+    await expect(signInWithPassword('a@b.com', 'secret', fetcher)).resolves.toEqual({
+      ok: true,
+      me: meBody.data,
+    });
+  });
+
+  it('signInWithPassword maps generic failures and rate limits', async () => {
+    const failed = async () =>
+      ({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: { code: 'invalid_credentials', message: 'Sign-in failed' } }),
+      }) as Response;
+    await expect(signInWithPassword('a@b.com', 'nope', failed)).resolves.toEqual({
+      ok: false,
+      code: 'invalid_credentials',
+      message: 'Sign-in failed',
+    });
+
+    const limited = async () =>
+      ({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { code: 'rate_limited', message: 'Too many attempts' } }),
+      }) as Response;
+    await expect(signInWithPassword('a@b.com', 'nope', limited)).resolves.toEqual({
+      ok: false,
+      code: 'rate_limited',
+      message: 'Too many attempts',
+    });
+
+    const noEnvelope = async () =>
+      ({
+        ok: false,
+        status: 401,
+        json: async () => ({}),
+      }) as Response;
+    await expect(signInWithPassword('a@b.com', 'nope', noEnvelope)).resolves.toEqual({
+      ok: false,
+      code: 'invalid_credentials',
+      message: 'Sign-in failed',
+    });
+
+    const weird = async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: {} }),
+      }) as Response;
+    await expect(signInWithPassword('a@b.com', 'nope', weird)).resolves.toEqual({
+      ok: false,
+      code: 'invalid_credentials',
+      message: 'Sign-in failed',
+    });
+
+    await expect(
+      signInWithPassword('a@b.com', 'nope', async () => {
+        throw new Error('offline');
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      code: 'invalid_credentials',
+      message: 'Sign-in failed',
+    });
+  });
+
+  it('hasPasswordIdentity detects the password provider', () => {
+    expect(hasPasswordIdentity(meBody.data as never)).toBe(false);
+    expect(
+      hasPasswordIdentity({
+        email: 'a@b.com',
+        timezone: 'UTC',
+        weight_unit: 'lb',
+        identities: [{ provider: 'google' }, { provider: 'password' }],
+      }),
+    ).toBe(true);
+    expect(
+      hasPasswordIdentity({
+        email: 'a@b.com',
+        timezone: 'UTC',
+        weight_unit: 'lb',
+        identities: [{ provider: 'google' }],
+      }),
+    ).toBe(false);
+  });
+
   it('signOut posts json logout and swallows errors', async () => {
     const fetcher = vi.fn(async (path: string, init?: RequestInit) => {
       expect(path).toBe('/api/auth/logout');
@@ -447,5 +563,29 @@ describe('auth client', () => {
       code: 'invalid_request',
       message: 'Request failed',
     });
+  });
+
+  it('patchMe sends password fields', async () => {
+    const fetcher = vi.fn(async (_path: string, init?: RequestInit) => {
+      expect(init?.body).toBe(JSON.stringify({ password: 'new-pass', current_password: 'old-pass' }));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            email: 'a@b.com',
+            timezone: 'UTC',
+            weight_unit: 'lb',
+            identities: [{ provider: 'google' }, { provider: 'password' }],
+          },
+        }),
+      } as Response;
+    });
+
+    const result = await patchMe({ password: 'new-pass', current_password: 'old-pass' }, fetcher);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(hasPasswordIdentity(result.me)).toBe(true);
+    }
   });
 });

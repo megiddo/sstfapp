@@ -1,5 +1,5 @@
 import { apiFetch, parseApiData, parseApiError } from './api';
-import { messageForAuthCode } from './authErrors';
+import { messageForAuthCode, messageForPasswordCode } from './authErrors';
 
 export type Identity = { provider: string };
 
@@ -100,6 +100,35 @@ export async function signInWithGoogle(
   }
 }
 
+export async function signInWithPassword(
+  email: string,
+  password: string,
+  fetcher: typeof fetch = fetch,
+): Promise<SignInResult> {
+  try {
+    const { status, body } = await apiFetch(
+      '/api/auth/password',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      },
+      fetcher,
+    );
+    if (status !== 200) {
+      const error = parseApiError(body);
+      const code = error?.code ?? 'invalid_credentials';
+      return { ok: false, code, message: messageForPasswordCode(code) };
+    }
+    const me = parseMe(body);
+    if (me === null) {
+      return { ok: false, code: 'invalid_credentials', message: messageForPasswordCode('invalid_credentials') };
+    }
+    return { ok: true, me };
+  } catch {
+    return { ok: false, code: 'invalid_credentials', message: messageForPasswordCode('invalid_credentials') };
+  }
+}
+
 export async function signOut(fetcher: typeof fetch = fetch): Promise<void> {
   try {
     await apiFetch('/api/auth/logout', { method: 'POST', body: '{}' }, fetcher);
@@ -111,7 +140,13 @@ export async function signOut(fetcher: typeof fetch = fetch): Promise<void> {
 export type PatchMeInput = {
   timezone?: string;
   weight_unit?: 'lb' | 'kg';
+  password?: string;
+  current_password?: string;
 };
+
+export function hasPasswordIdentity(me: Me): boolean {
+  return me.identities.some((identity) => identity.provider === 'password');
+}
 
 export type PatchMeResult =
   | { ok: true; me: Me }

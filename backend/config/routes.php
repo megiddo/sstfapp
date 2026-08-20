@@ -24,6 +24,8 @@ return static function (App $app): void {
     $app->post('/api/exercises', [ExerciseController::class, 'create']);
     $app->post('/api/auth/google', [AuthController::class, 'google'])
         ->add($json);
+    $app->post('/api/auth/password', [AuthController::class, 'password'])
+        ->add($json);
     $app->post('/api/auth/logout', [AuthController::class, 'logout'])
         ->add($json);
 

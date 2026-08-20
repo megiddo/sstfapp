@@ -12,14 +12,19 @@ use Psr\Http\Server\RequestHandlerInterface;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Response;
 use Sstf\Api\Http\JsonResponder;
+use Sstf\Api\Http\Middleware\AuthRateLimit;
 use Sstf\Api\Http\Middleware\RequireJsonContentType;
 use Sstf\Api\Http\Middleware\SessionAuth;
+use Sstf\Api\Infrastructure\RateLimit\MemoryAuthRateLimiter;
 use Sstf\Api\Infrastructure\Session\FileSessionStore;
 use Sstf\Api\Infrastructure\Session\SessionCookie;
 use Sstf\Api\Infrastructure\Session\SessionService;
+use Sstf\Api\Tests\Fakes\FakeClock;
+use Sstf\Api\Tests\Fakes\ThrowingAuthRateLimiter;
 
 #[CoversClass(RequireJsonContentType::class)]
 #[CoversClass(SessionAuth::class)]
+#[CoversClass(AuthRateLimit::class)]
 #[CoversClass(JsonResponder::class)]
 final class AuthMiddlewareTest extends TestCase
 {
@@ -95,6 +100,49 @@ final class AuthMiddlewareTest extends TestCase
         $this->assertSame('0123456789abcdef0123456789abcdef', (string) $authed->getBody());
 
         $this->deleteTree($tmp);
+    }
+
+    public function testAuthRateLimitSkipsNonAuthPathsAndTripsOnAuth(): void
+    {
+        $clock = new FakeClock(1_700);
+        $limiter = new MemoryAuthRateLimiter(1, 60, $clock);
+        $mw = new AuthRateLimit($limiter);
+        $handler = $this->okHandler();
+
+        $health = $mw->process($this->request('GET', '/api/health'), $handler);
+        $this->assertSame(204, $health->getStatusCode());
+        $me = $mw->process($this->request('GET', '/api/me'), $handler);
+        $this->assertSame(204, $me->getStatusCode());
+
+        $first = $mw->process($this->request('POST', '/api/auth/password'), $handler);
+        $this->assertSame(204, $first->getStatusCode());
+        $blocked = $mw->process($this->request('POST', '/api/auth/google'), $handler);
+        $this->assertSame(429, $blocked->getStatusCode());
+        $payload = json_decode((string) $blocked->getBody(), true);
+        $this->assertSame('rate_limited', $payload['error']['code']);
+        $this->assertSame('Too many attempts', $payload['error']['message']);
+        $this->assertArrayNotHasKey('data', $payload);
+
+        $logout = $mw->process($this->request('POST', '/api/auth/logout'), $handler);
+        $this->assertSame(429, $logout->getStatusCode());
+    }
+
+    public function testAuthRateLimitFailsClosedWhenLimiterThrows(): void
+    {
+        $mw = new AuthRateLimit(new ThrowingAuthRateLimiter());
+        $blocked = $mw->process($this->request('POST', '/api/auth/password'), $this->okHandler());
+        $this->assertSame(429, $blocked->getStatusCode());
+        $this->assertSame('rate_limited', json_decode((string) $blocked->getBody(), true)['error']['code']);
+    }
+
+    public function testAuthRateLimitUsesUnknownWhenRemoteAddrMissing(): void
+    {
+        $clock = new FakeClock(2_000);
+        $mw = new AuthRateLimit(new MemoryAuthRateLimiter(1, 30, $clock));
+        $handler = $this->okHandler();
+        $withoutIp = (new ServerRequestFactory())->createServerRequest('POST', '/api/auth/password');
+        $this->assertSame(204, $mw->process($withoutIp, $handler)->getStatusCode());
+        $this->assertSame(429, $mw->process($withoutIp, $handler)->getStatusCode());
     }
 
     private function request(string $method, string $path): ServerRequestInterface

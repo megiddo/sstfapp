@@ -62,9 +62,9 @@ Workout is the default after login. Deep-link `/` with `?set=` after a manual sw
 ### 4.1 Login
 
 - App name: **SSTF** with subtitle “Single set to failure.”
-- One primary action: **Continue with Google**.
-- Short note: account is created from the Google email; later password login will use the same email.
-- Error: “Google sign-in failed” / “Email not verified” — no stack traces.
+- **Continue with Google** or email/password. Both methods use the same email and open the same user file.
+- Inputs are 16px on a phone column. Official Google button (not One Tap).
+- Error: “Google sign-in failed” / “Email not verified” / “Sign-in failed” / “Too many attempts” — no stack traces.
 
 ### 4.2 Workout (home) — primary
 
@@ -170,7 +170,7 @@ Tapping a line is read-only in MVP (no edit/delete of history until a later mile
 - Weight unit: lb / kg (does not rewrite old logs; each log stores its unit)
 - **Download my data** → user SQLite file
 - Log out
-- Phase 6: set / change password
+- Set / change password (current password required when one is already set)
 
 ## 5. Core flows (requirements)
 

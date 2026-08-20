@@ -40,11 +40,15 @@ abstract class HttpTestCase extends TestCase
         $_ENV['SESSION_SECRET'] = 'testing-session-secret-key';
         $_ENV['GOOGLE_CLIENT_ID'] = 'test-google-client-id.apps.googleusercontent.com';
         $_ENV['APP_ENV'] = 'testing';
+        $_ENV['AUTH_RATE_LIMIT_MAX'] = (string) $this->rateLimitMax();
+        $_ENV['AUTH_RATE_LIMIT_WINDOW'] = '60';
         putenv('DATA_PATH=' . $this->dataDir);
         putenv('SESSION_PATH=' . $this->dataDir . '/sessions');
         putenv('SESSION_SECRET=testing-session-secret-key');
         putenv('GOOGLE_CLIENT_ID=' . $_ENV['GOOGLE_CLIENT_ID']);
         putenv('APP_ENV=testing');
+        putenv('AUTH_RATE_LIMIT_MAX=' . $this->rateLimitMax());
+        putenv('AUTH_RATE_LIMIT_WINDOW=60');
 
         $this->cookies = [];
         $this->googleVerifier = new FakeGoogleIdTokenVerifier();
@@ -73,7 +77,9 @@ abstract class HttpTestCase extends TestCase
         ?array $json = null,
         array $headers = [],
     ): ResponseInterface {
-        $request = (new ServerRequestFactory())->createServerRequest($method, $uri);
+        $request = (new ServerRequestFactory())->createServerRequest($method, $uri, [
+            'REMOTE_ADDR' => '127.0.0.1',
+        ]);
         $request = $request->withCookieParams($this->cookies);
 
         if ($this->cookies !== []) {
@@ -137,6 +143,11 @@ abstract class HttpTestCase extends TestCase
 
         $response = $this->request('POST', '/api/auth/google', $body);
         $this->assertSame(200, $response->getStatusCode());
+    }
+
+    protected function rateLimitMax(): int
+    {
+        return 10000;
     }
 
     private function captureCookies(ResponseInterface $response): void

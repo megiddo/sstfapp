@@ -45,6 +45,10 @@ Copy `.env.example` to `.env`. Compose also sets container values.
 | `GOOGLE_CLIENT_ID` | Google Identity Services / OAuth client ID. Used to verify ID token `aud`. |
 | `PUBLIC_GOOGLE_CLIENT_ID` | Same value for the SvelteKit login button (Vite public env). |
 | `SESSION_SECRET` | HMAC key for the HttpOnly `sstf_session` cookie. Use a long random string in production. |
+| `AUTH_RATE_LIMIT_MAX` | Max `/api/auth/*` requests per IP per window. Defaults to 10 (10000 when `APP_ENV=testing`). |
+| `AUTH_RATE_LIMIT_WINDOW` | Rate-limit window in seconds. Default 60. |
+
+Sign in with **Google** or **email/password**. Both methods use the same verified email and open the same `data/users/{md5}.sqlite` file. Set or change a password in Settings.
 
 Do not commit `.env` or any `*.sqlite` files.
 

@@ -213,6 +213,120 @@ final class AuthControllerTest extends TestCase
         $this->assertStringContainsString('Max-Age=0', $logout->getHeaderLine('Set-Cookie'));
     }
 
+    public function testPasswordLoginMapsErrorsAndSetsCookie(): void
+    {
+        $verifier = new FakeGoogleIdTokenVerifier();
+        $auth = $this->auth($verifier);
+        $controller = new AuthController($auth, $this->sessions());
+        $factory = new ServerRequestFactory();
+
+        $notArray = $controller->password(
+            $factory->createServerRequest('POST', '/api/auth/password')->withParsedBody(null),
+            new Response(),
+        );
+        $this->assertSame(400, $notArray->getStatusCode());
+        $this->assertStringContainsString('invalid_request', (string) $notArray->getBody());
+        $this->assertStringContainsString('Sign-in failed', (string) $notArray->getBody());
+
+        $missing = $controller->password(
+            $factory->createServerRequest('POST', '/api/auth/password')->withParsedBody(['email' => 1, 'password' => 'x']),
+            new Response(),
+        );
+        $this->assertSame(400, $missing->getStatusCode());
+
+        $emptyPassword = $controller->password(
+            $factory->createServerRequest('POST', '/api/auth/password')->withParsedBody([
+                'email' => 'a@b.com',
+                'password' => '',
+            ]),
+            new Response(),
+        );
+        $this->assertSame(400, $emptyPassword->getStatusCode());
+
+        $unknown = $controller->password(
+            $factory->createServerRequest('POST', '/api/auth/password')->withParsedBody([
+                'email' => 'missing@example.com',
+                'password' => 'secret',
+            ]),
+            new Response(),
+        );
+        $this->assertSame(401, $unknown->getStatusCode());
+        $this->assertStringContainsString('invalid_credentials', (string) $unknown->getBody());
+        $this->assertStringNotContainsString('secret', (string) $unknown->getBody());
+
+        $auth->registerWithPassword('pw@example.com', 'right-pass', 'UTC');
+        $ok = $controller->password(
+            $factory->createServerRequest('POST', '/api/auth/password')->withParsedBody([
+                'email' => 'pw@example.com',
+                'password' => 'right-pass',
+            ]),
+            new Response(),
+        );
+        $this->assertSame(200, $ok->getStatusCode());
+        $this->assertNotSame('', $ok->getHeaderLine('Set-Cookie'));
+        $json = json_decode((string) $ok->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertArrayNotHasKey('password_hash', $json['data']);
+        $this->assertSame('pw@example.com', $json['data']['email']);
+    }
+
+    public function testPatchPasswordTypeErrors(): void
+    {
+        $verifier = new FakeGoogleIdTokenVerifier();
+        $verifier->willVerify('ok', FakeGoogleIdTokenVerifier::user('me@example.com'));
+        $auth = $this->auth($verifier);
+        $auth->signInWithGoogle('ok', 'UTC');
+        $me = new MeController($auth);
+        $hash = md5('me@example.com');
+        $factory = new ServerRequestFactory();
+
+        $badPassword = $me->patch(
+            $factory->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', $hash)
+                ->withParsedBody(['password' => 1]),
+            new Response(),
+        );
+        $this->assertSame(400, $badPassword->getStatusCode());
+        $this->assertStringContainsString('invalid_password', (string) $badPassword->getBody());
+
+        $badCurrent = $me->patch(
+            $factory->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', $hash)
+                ->withParsedBody(['password' => 'x', 'current_password' => 1]),
+            new Response(),
+        );
+        $this->assertSame(400, $badCurrent->getStatusCode());
+        $this->assertStringContainsString('invalid_current_password', (string) $badCurrent->getBody());
+
+        $empty = $me->patch(
+            $factory->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', $hash)
+                ->withParsedBody(['password' => '']),
+            new Response(),
+        );
+        $this->assertSame(400, $empty->getStatusCode());
+        $this->assertStringContainsString('invalid_password', (string) $empty->getBody());
+
+        $set = $me->patch(
+            $factory->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', $hash)
+                ->withParsedBody(['password' => 'first-pass']),
+            new Response(),
+        );
+        $this->assertSame(200, $set->getStatusCode());
+        $setJson = json_decode((string) $set->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertArrayNotHasKey('password_hash', $setJson['data']);
+        $this->assertStringNotContainsString('first-pass', (string) $set->getBody());
+
+        $wrongCurrent = $me->patch(
+            $factory->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', $hash)
+                ->withParsedBody(['password' => 'second-pass', 'current_password' => 'nope']),
+            new Response(),
+        );
+        $this->assertSame(400, $wrongCurrent->getStatusCode());
+        $this->assertStringContainsString('invalid_current_password', (string) $wrongCurrent->getBody());
+    }
+
     private function auth(FakeGoogleIdTokenVerifier $verifier): AuthService
     {
         $migrator = new Migrator();
@@ -224,6 +338,11 @@ final class AuthControllerTest extends TestCase
             $verifier,
             new UserDirectory($users, $global, new SystemClock()),
             $this->sessions(),
+            [
+                'memory_cost' => 16,
+                'time_cost' => 1,
+                'threads' => 1,
+            ],
         );
     }
 

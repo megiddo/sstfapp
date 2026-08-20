@@ -129,14 +129,16 @@ Companion docs: [DESIGN.md](./DESIGN.md), [UI.md](./UI.md).
 
 **Goal:** Email/password maps to the same repo as Google via email.
 
-- [ ] Set password on `/settings` (`password_hash` Argon2id in user DB, `identities.password`)
-- [ ] `POST /api/auth/password` `{ email, password }`
-- [ ] Login page: Google **or** email/password
-- [ ] Google-first then password, and password-first then Google, both land on one file
-- [ ] Rate limit auth routes
-- [ ] No password in logs or export filenames
+- [x] Set password on `/settings` (`password_hash` Argon2id in user DB, `identities.password`)
+- [x] `POST /api/auth/password` `{ email, password }`
+- [x] Login page: Google **or** email/password
+- [x] Google-first then password, and password-first then Google, both land on one file
+- [x] Rate limit auth routes
+- [x] No password in logs or export filenames
 
 **Exit:** One email, two buttons, one SQLite file, same schedules and logs.
+
+**Progress (M6):** 2026-08-20, branch `sstf-m6`. PHP line coverage **97.99%**; Infection MSI **85%** (covered MSI 87%); Svelte line coverage **97.39%** on `frontend/src/lib`; Stryker **76.62%**.
 
 ---
 

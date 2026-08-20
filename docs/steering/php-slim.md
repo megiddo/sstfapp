@@ -80,4 +80,4 @@ See [QUALITY.md](../QUALITY.md). Do not lower these without a documented excepti
 
 - Coding standards (phpcs / phpstan levels)
 - Session + CSRF (Phase 1): HttpOnly session cookie + JSON Content-Type on mutating auth routes
-- Rate limits on `/api/auth/*` (Phase 6+)
+- Rate limits on `/api/auth/*` (Phase 6): per IP, env-tunable, fail closed with 429

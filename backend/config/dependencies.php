@@ -14,8 +14,11 @@ use Sstf\Api\Http\Controllers\ScheduleController;
 use Sstf\Api\Http\Controllers\SetController;
 use Sstf\Api\Http\Controllers\WorkoutController;
 use Sstf\Api\Http\JsonErrorHandler;
+use Sstf\Api\Http\Middleware\AuthRateLimit;
 use Sstf\Api\Http\Middleware\RequireJsonContentType;
 use Sstf\Api\Http\Middleware\SessionAuth;
+use Sstf\Api\Infrastructure\RateLimit\AuthRateLimiterInterface;
+use Sstf\Api\Infrastructure\RateLimit\MemoryAuthRateLimiter;
 use Sstf\Api\Infrastructure\Google\GoogleCertsProviderInterface;
 use Sstf\Api\Infrastructure\Google\GoogleIdTokenVerifierInterface;
 use Sstf\Api\Infrastructure\Google\GoogleJwtIdTokenVerifier;
@@ -122,12 +125,33 @@ return [
         );
     },
 
-    AuthService::class => static function ($c): AuthService {
+    AuthService::class => static function ($c) use ($settings): AuthService {
+        $password = $settings['password'];
+
         return new AuthService(
             $c->get(GoogleIdTokenVerifierInterface::class),
             $c->get(UserDirectory::class),
             $c->get(SessionService::class),
+            [
+                'memory_cost' => (int) $password['memory_cost'],
+                'time_cost' => (int) $password['time_cost'],
+                'threads' => (int) $password['threads'],
+            ],
         );
+    },
+
+    AuthRateLimiterInterface::class => static function ($c) use ($settings): AuthRateLimiterInterface {
+        $limit = $settings['auth_rate_limit'];
+
+        return new MemoryAuthRateLimiter(
+            (int) $limit['max'],
+            (int) $limit['window_seconds'],
+            $c->get(ClockInterface::class),
+        );
+    },
+
+    AuthRateLimit::class => static function ($c): AuthRateLimit {
+        return new AuthRateLimit($c->get(AuthRateLimiterInterface::class));
     },
 
     AuthController::class => static function ($c): AuthController {
