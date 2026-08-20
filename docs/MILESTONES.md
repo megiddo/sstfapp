@@ -113,13 +113,15 @@ Companion docs: [DESIGN.md](./DESIGN.md), [UI.md](./UI.md).
 
 **Goal:** The user can read what they did and take their database with them.
 
-- [ ] `GET /api/logs` grouped by day
-- [ ] History screen: day headers, `Name  weight × reps`
-- [ ] Settings: email (read-only), timezone, unit, logout
-- [ ] `GET /api/export` downloads the user SQLite file (`Content-Disposition`)
-- [ ] Units: UI displays the log’s stored unit; changing account unit affects new logs only
+- [x] `GET /api/logs` grouped by day
+- [x] History screen: day headers, `Name  weight × reps`
+- [x] Settings: email (read-only), timezone, unit, logout
+- [x] `GET /api/export` downloads the user SQLite file (`Content-Disposition`)
+- [x] Units: UI displays the log’s stored unit; changing account unit affects new logs only
 
 **Exit:** Two logged days render in History; Download my data opens the same file the server uses.
+
+**Progress (M5):** 2026-08-20, branch `sstf-m5`. PHP line coverage **98.03%**; Infection MSI **86%** (covered MSI 88%); Svelte line coverage **97.44%** on `frontend/src/lib`; Stryker **76.76%**.
 
 ---
 

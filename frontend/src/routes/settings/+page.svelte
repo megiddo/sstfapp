@@ -1,5 +1,6 @@
 <script lang="ts">
-  import ComingSoon from '$lib/ComingSoon.svelte';
+  import { goto } from '$app/navigation';
+  import SettingsPage from '$lib/SettingsPage.svelte';
 </script>
 
-<ComingSoon title="Settings" />
+<SettingsPage navigate={goto} />

@@ -120,6 +120,26 @@ final class LogRepository
     }
 
     /**
+     * @return list<ExerciseLog>
+     */
+    public function listAll(string $emailHash): array
+    {
+        $pdo = $this->users->open($emailHash);
+        $stmt = $pdo->query(
+            'SELECT id, logged_at, schedule_id, schedule_name, set_id, set_name, set_day_of_week, set_start_minutes,
+                    global_exercise_id, exercise_name, muscle_group, weight, weight_unit, reps, notes
+             FROM logs
+             ORDER BY logged_at DESC, id DESC',
+        );
+        $logs = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $logs[] = $this->mapLog($row);
+        }
+
+        return $logs;
+    }
+
+    /**
      * @param array<mixed>|false $row
      */
     private function mapPrefill(array|false $row): ?LogPrefill

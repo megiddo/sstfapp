@@ -6,11 +6,14 @@ import {
   DAY_NAMES,
   formatHeaderDate,
   formatHeaderWeekday,
+  formatHistoryDay,
   formatLastLog,
+  formatLogLine,
   formatMinutes,
   formatSetSubtitle,
   isDayOfWeek,
   minutesToTimeInput,
+  parseIsoDay,
   parseNonNegativeInt,
   parseNonNegativeNumber,
   parseSetQuery,
@@ -124,6 +127,23 @@ describe('format', () => {
     expect(parseNonNegativeInt('8')).toBe(8);
     expect(parseNonNegativeInt('8.5')).toBeNull();
     expect(parseNonNegativeInt('-2')).toBeNull();
+  });
+
+  it('formats history day headers and log lines with stored units', () => {
+    expect(formatLogLine('Bench Press', 185, 'lb', 8)).toBe('Bench Press  185 lb × 8');
+    expect(formatLogLine('Squat', 80, 'kg', 5)).toBe('Squat  80 kg × 5');
+    expect(formatLogLine('Bench Press', 185, 'lb', 8)).not.toBe('Bench Press 185 lb × 8');
+    expect(formatHistoryDay('2026-08-19')).toMatch(/Wednesday/);
+    expect(formatHistoryDay('2026-08-19')).toMatch(/Aug/);
+    expect(formatHistoryDay('2026-08-19')).toMatch(/19/);
+    expect(formatHistoryDay('2026-08-19')).toMatch(/2026/);
+    expect(formatHistoryDay('nope')).toBe('nope');
+    expect(formatHistoryDay('2026-13-40')).toBe('2026-13-40');
+    expect(parseIsoDay('2026-08-19')?.getDate()).toBe(19);
+    expect(parseIsoDay('2026-08-19')?.getMonth()).toBe(7);
+    expect(parseIsoDay('')).toBeNull();
+    expect(parseIsoDay('2026-8-19')).toBeNull();
+    expect(parseIsoDay('2026-02-30')).toBeNull();
   });
 
   it('formats header weekday and date', () => {

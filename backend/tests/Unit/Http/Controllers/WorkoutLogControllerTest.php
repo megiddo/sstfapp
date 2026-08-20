@@ -120,6 +120,7 @@ final class WorkoutLogControllerTest extends TestCase
         $unauth = $factory->createServerRequest('GET', '/api/workout/current');
         $this->assertSame(401, $this->workouts->current($unauth, new Response())->getStatusCode());
         $this->assertSame(401, $this->workouts->sets($unauth, new Response())->getStatusCode());
+        $this->assertSame(401, $this->logs->index($unauth, new Response())->getStatusCode());
         $this->assertSame(401, $this->logs->create($unauth->withParsedBody([
             'set_id' => 1,
             'global_exercise_id' => 1,
@@ -131,6 +132,7 @@ final class WorkoutLogControllerTest extends TestCase
             ->withAttribute('email_hash', str_repeat('11', 16));
         $this->assertSame(401, $this->workouts->current($missingAccount, new Response())->getStatusCode());
         $this->assertSame(401, $this->workouts->sets($missingAccount, new Response())->getStatusCode());
+        $this->assertSame(401, $this->logs->index($missingAccount, new Response())->getStatusCode());
         $this->assertSame(401, $this->logs->create($missingAccount->withParsedBody([
             'set_id' => 1,
             'global_exercise_id' => 1,

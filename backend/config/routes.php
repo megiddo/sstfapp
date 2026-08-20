@@ -8,6 +8,7 @@ use Sstf\Api\Http\Controllers\ExerciseController;
 use Sstf\Api\Http\Controllers\HealthController;
 use Sstf\Api\Http\Controllers\MeController;
 use Sstf\Api\Http\Controllers\ScheduleController;
+use Sstf\Api\Http\Controllers\ExportController;
 use Sstf\Api\Http\Controllers\LogController;
 use Sstf\Api\Http\Controllers\SetController;
 use Sstf\Api\Http\Controllers\WorkoutController;
@@ -48,6 +49,8 @@ return static function (App $app): void {
 
     $app->get('/api/workout/current', [WorkoutController::class, 'current']);
     $app->get('/api/workout/sets', [WorkoutController::class, 'sets']);
+    $app->get('/api/logs', [LogController::class, 'index']);
     $app->post('/api/logs', [LogController::class, 'create'])
         ->add($json);
+    $app->get('/api/export', [ExportController::class, 'download']);
 };

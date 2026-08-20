@@ -7,7 +7,7 @@ import {
   shouldShowAuthenticatedShell,
   shouldShowLogin,
 } from './authGate';
-import { browserTimeZone } from './timezone';
+import { browserTimeZone, COMMON_TIMEZONES, timezoneChoices } from './timezone';
 
 const meBody = {
   data: {
@@ -85,6 +85,17 @@ describe('timezone', () => {
     } as unknown as Pick<typeof Intl, 'DateTimeFormat'>;
     expect(browserTimeZone(chicago)).toBe('America/Chicago');
     expect(browserTimeZone(chicago)).not.toBe('UTC');
+  });
+
+  it('offers a phone-usable timezone subset plus the current value', () => {
+    expect(COMMON_TIMEZONES).toContain('UTC');
+    expect(COMMON_TIMEZONES).toContain('America/Chicago');
+    expect(timezoneChoices('America/Chicago')).toContain('America/Chicago');
+    expect(timezoneChoices('America/Chicago')).toContain('UTC');
+    expect(timezoneChoices('Pacific/Tahiti')).toContain('Pacific/Tahiti');
+    expect(timezoneChoices('Pacific/Tahiti')).toContain('America/Chicago');
+    expect(timezoneChoices('')).not.toContain('');
+    expect(timezoneChoices('UTC')[0] <= timezoneChoices('UTC')[1]!).toBe(true);
   });
 });
 

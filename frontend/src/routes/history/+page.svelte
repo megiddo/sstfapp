@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ComingSoon from '$lib/ComingSoon.svelte';
+  import HistoryPage from '$lib/HistoryPage.svelte';
 </script>
 
-<ComingSoon title="History" />
+<HistoryPage />

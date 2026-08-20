@@ -116,6 +116,38 @@ export function parseNonNegativeNumber(raw: string): number | null {
   return parsed;
 }
 
+export function formatLogLine(name: string, weight: number, unit: string, reps: number): string {
+  return `${name}  ${weight} ${unit} × ${reps}`;
+}
+
+export function parseIsoDay(iso: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (match === null) {
+    return null;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    return null;
+  }
+  return date;
+}
+
+export function formatHistoryDay(iso: string): string {
+  const date = parseIsoDay(iso);
+  if (date === null) {
+    return iso;
+  }
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 export function parseNonNegativeInt(raw: string): number | null {
   const trimmed = raw.trim();
   if (trimmed === '') {

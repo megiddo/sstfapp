@@ -20,6 +20,27 @@ final class LogController
     ) {
     }
 
+    public function index(Request $request, Response $response): Response
+    {
+        $hash = $this->emailHash($request);
+        if ($hash === null) {
+            return JsonResponder::error('unauthenticated', 'Authentication required', 401);
+        }
+
+        try {
+            $days = $this->logs->history($hash);
+        } catch (UnauthenticatedException) {
+            return JsonResponder::error('unauthenticated', 'Authentication required', 401);
+        }
+
+        $payload = [];
+        foreach ($days as $day) {
+            $payload[] = $day->toApi();
+        }
+
+        return JsonResponder::data(['days' => $payload]);
+    }
+
     public function create(Request $request, Response $response): Response
     {
         $hash = $this->emailHash($request);

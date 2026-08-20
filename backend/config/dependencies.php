@@ -6,6 +6,7 @@ use Sstf\Api\Domain\ClockInterface;
 use Sstf\Api\Domain\SystemClock;
 use Sstf\Api\Http\Controllers\AuthController;
 use Sstf\Api\Http\Controllers\ExerciseController;
+use Sstf\Api\Http\Controllers\ExportController;
 use Sstf\Api\Http\Controllers\HealthController;
 use Sstf\Api\Http\Controllers\LogController;
 use Sstf\Api\Http\Controllers\MeController;
@@ -33,6 +34,7 @@ use Sstf\Api\Infrastructure\Sqlite\UserDbFactory;
 use Sstf\Api\Infrastructure\Sqlite\UserDirectory;
 use Sstf\Api\Services\AuthService;
 use Sstf\Api\Services\ExerciseService;
+use Sstf\Api\Services\ExportService;
 use Sstf\Api\Services\HealthService;
 use Sstf\Api\Services\LogService;
 use Sstf\Api\Services\ScheduleService;
@@ -222,6 +224,17 @@ return [
 
     LogController::class => static function ($c): LogController {
         return new LogController($c->get(LogService::class));
+    },
+
+    ExportService::class => static function ($c): ExportService {
+        return new ExportService(
+            $c->get(UserDirectory::class),
+            $c->get(UserDbFactory::class),
+        );
+    },
+
+    ExportController::class => static function ($c): ExportController {
+        return new ExportController($c->get(ExportService::class));
     },
 
     SessionAuth::class => static function ($c): SessionAuth {
