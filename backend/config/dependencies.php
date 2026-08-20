@@ -15,8 +15,11 @@ use Sstf\Api\Http\Controllers\SetController;
 use Sstf\Api\Http\Controllers\WorkoutController;
 use Sstf\Api\Http\JsonErrorHandler;
 use Sstf\Api\Http\Middleware\AuthRateLimit;
+use Sstf\Api\Http\Middleware\RequestLog;
 use Sstf\Api\Http\Middleware\RequireJsonContentType;
+use Sstf\Api\Http\Middleware\SecurityHeaders;
 use Sstf\Api\Http\Middleware\SessionAuth;
+use Sstf\Api\Infrastructure\Log\JsonLogger;
 use Sstf\Api\Infrastructure\RateLimit\AuthRateLimiterInterface;
 use Sstf\Api\Infrastructure\RateLimit\MemoryAuthRateLimiter;
 use Sstf\Api\Infrastructure\Google\GoogleCertsProviderInterface;
@@ -42,6 +45,7 @@ use Sstf\Api\Services\HealthService;
 use Sstf\Api\Services\LogService;
 use Sstf\Api\Services\ScheduleService;
 use Sstf\Api\Services\SetService;
+use Sstf\Api\Services\SuggestedExerciseService;
 use Sstf\Api\Services\WorkoutService;
 
 $settings = require __DIR__ . '/settings.php';
@@ -59,6 +63,18 @@ return [
 
     JsonErrorHandler::class => static function () use ($settings): JsonErrorHandler {
         return new JsonErrorHandler((bool) $settings['app']['debug']);
+    },
+
+    JsonLogger::class => static function () use ($settings): JsonLogger {
+        $enabled = ($settings['app']['env'] ?? 'development') !== 'testing';
+
+        return JsonLogger::stderr($enabled);
+    },
+
+    SecurityHeaders::class => static fn (): SecurityHeaders => new SecurityHeaders(),
+
+    RequestLog::class => static function ($c): RequestLog {
+        return new RequestLog($c->get(JsonLogger::class));
     },
 
     Migrator::class => static fn (): Migrator => new Migrator(),
@@ -176,8 +192,15 @@ return [
         return new ExerciseService($c->get(ExerciseRepository::class));
     },
 
+    SuggestedExerciseService::class => static function ($c): SuggestedExerciseService {
+        return new SuggestedExerciseService($c->get(LogRepository::class));
+    },
+
     ExerciseController::class => static function ($c): ExerciseController {
-        return new ExerciseController($c->get(ExerciseService::class));
+        return new ExerciseController(
+            $c->get(ExerciseService::class),
+            $c->get(SuggestedExerciseService::class),
+        );
     },
 
     ScheduleRepository::class => static function ($c): ScheduleRepository {

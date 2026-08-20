@@ -8,11 +8,13 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Sstf\Api\Domain\ExerciseLog;
 use Sstf\Api\Domain\HistoryDay;
+use Sstf\Api\Domain\HistoryFilters;
 use Sstf\Api\Domain\HistoryGrouper;
 use Sstf\Api\Domain\IanaTimezone;
 
 #[CoversClass(HistoryGrouper::class)]
 #[CoversClass(HistoryDay::class)]
+#[CoversClass(HistoryFilters::class)]
 #[CoversClass(ExerciseLog::class)]
 #[CoversClass(IanaTimezone::class)]
 final class HistoryGrouperTest extends TestCase
@@ -68,6 +70,25 @@ final class HistoryGrouperTest extends TestCase
         $this->assertCount(1, $days);
         $this->assertSame('2026-08-19', $days[0]->date);
         $this->assertSame([8, 7], array_map(static fn (ExerciseLog $log): int => $log->id, $days[0]->logs));
+    }
+
+    public function testInDateRangeKeepsInclusiveBounds(): void
+    {
+        $a = new HistoryDay('2026-08-18', [$this->log(1, '2026-08-18T18:00:00+00:00', 'Evening', 'Row', 135, 'lb', 10)]);
+        $b = new HistoryDay('2026-08-19', [$this->log(2, '2026-08-19T18:00:00+00:00', 'Evening', 'Bench Press', 185, 'lb', 8)]);
+        $c = new HistoryDay('2026-08-20', [$this->log(3, '2026-08-20T18:00:00+00:00', 'Evening', 'Squat', 225, 'lb', 5)]);
+        $days = [$a, $b, $c];
+
+        $filtered = HistoryGrouper::inDateRange($days, HistoryFilters::fromQuery([
+            'from' => '2026-08-19',
+            'to' => '2026-08-19',
+        ]));
+        $this->assertCount(1, $filtered);
+        $this->assertSame('2026-08-19', $filtered[0]->date);
+
+        $open = HistoryGrouper::inDateRange($days, HistoryFilters::fromQuery([]));
+        $this->assertCount(3, $open);
+        $this->assertSame($days, $open);
     }
 
     private function log(

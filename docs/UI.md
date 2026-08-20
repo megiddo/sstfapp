@@ -121,7 +121,7 @@ If no active schedule, or the active schedule has no sets, or a set has no exerc
 
 - Cards: name, set count, **Active** pill on one of them
 - Tap card → week editor
-- Trailing / overflow: Activate, Archive
+- Trailing / overflow: Activate, Archive (confirm before archive)
 - Full-width **New schedule** button (sticky above the bottom nav, not a tiny FAB that fights the nav)
 - Creating the first schedule auto-activates it and routes to the editor
 
@@ -138,7 +138,7 @@ Layout (all widths):
 Set row:
 
 - Name (tap to edit; large field)
-- Start time (native `input type="time"` or a 15-minute sheet — 48px rows)
+- Start time (15-minute sheet — 48px rows; snaps `start_minutes` in the UI)
 - Exercise count
 - Tap the row → **set exercise editor** as a **full-screen push** with a back chevron. No side panel.
 
@@ -146,6 +146,7 @@ Set row:
 
 - Header: back, set name, day, time
 - Search the global catalog (`GET /api/exercises?q=`), results as tappable rows
+- Recent / frequent from the user’s logs above the catalog search
 - Add appends a denormalized row
 - Reorder with **up/down** buttons (48px). Drag is optional later, never the only path
 - Remove from this set (does not delete global exercise or logs)
@@ -158,7 +159,7 @@ Save reorder on each up/down so a backgrounded phone cannot lose the list.
 - Reverse-chronological days
 - Day header: date
 - Under each day: set name, then exercise lines `Bench Press  185 × 8`
-- Filter later: exercise, date range (not MVP-blocking)
+- Filter: exercise, date range (`from` / `to`). Date inputs 16px+, stacked on a phone column.
 - Empty: “No sets logged yet”
 
 Tapping a line is read-only in MVP (no edit/delete of history until a later milestone).

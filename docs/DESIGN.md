@@ -234,6 +234,7 @@ All `/api/*` except auth endpoints require a valid session.
 | `GET` | `/api/me` | Account, identities, timezone, unit. |
 | `PATCH` | `/api/me` | Timezone, unit, password (current password required if already set). |
 | `GET` | `/api/exercises` | Global catalog, `?q=` search. |
+| `GET` | `/api/exercises/suggested` | Recent and frequent exercises from the caller’s logs. |
 | `POST` | `/api/exercises` | Add global exercise (unique name). |
 | `GET` | `/api/schedules` | All non-archived schedules + set counts. |
 | `POST` | `/api/schedules` | Create. If first, mark active. |
@@ -305,6 +306,9 @@ Canonical layout is a single ~390px column. `app.html` must set `viewport` (`wid
 - Do not list other users’ hashes to clients.
 - CSRF: same-site cookie + JSON `Content-Type` requirement is enough for this SPA; add a CSRF token if the cookie is ever used by form posts.
 - Rate-limit `/api/auth/*`.
+- Security headers on every response: `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `X-Frame-Options: DENY`, and a CSP that allows the GIS script (`https://accounts.google.com`) plus the SPA.
+- Structured JSON logs to STDERR. Info logs may include `email_hash` but never raw emails, ID tokens, or passwords.
+- Optional `X-Request-Id` request/response header.
 - Export is authenticated and returns only the caller’s file.
 
 ## 10. Decisions already locked

@@ -158,3 +158,25 @@ export function parseNonNegativeInt(raw: string): number | null {
   }
   return Number(trimmed);
 }
+
+export function snapMinutesToQuarter(minutes: number): number {
+  if (!Number.isFinite(minutes)) {
+    return 0;
+  }
+  const snapped = Math.round(minutes / 15) * 15;
+  if (snapped < 0) {
+    return 0;
+  }
+  if (snapped > 1425) {
+    return 1425;
+  }
+  return snapped;
+}
+
+export function quarterHourOptions(): number[] {
+  const minutes: number[] = [];
+  for (let value = 0; value <= 1425; value += 15) {
+    minutes.push(value);
+  }
+  return minutes;
+}

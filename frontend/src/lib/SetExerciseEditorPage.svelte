@@ -1,7 +1,8 @@
 <script lang="ts">
   import ExerciseSearch from './ExerciseSearch.svelte';
   import PhoneShell from './PhoneShell.svelte';
-  import { createExercise, listExercises, type Exercise } from './exercises';
+  import SuggestedExercises from './SuggestedExercises.svelte';
+  import { createExercise, listExercises, listSuggested, type Exercise } from './exercises';
   import { DAY_NAMES, formatMinutes } from './format';
   import {
     listScheduleSets,
@@ -19,6 +20,7 @@
     loadSets = listScheduleSets,
     saveExercises = replaceSetExercises,
     searchExercises = listExercises,
+    loadSuggested = listSuggested,
     addCatalogExercise = createExercise,
   }: {
     scheduleId: number;
@@ -27,12 +29,15 @@
     loadSets?: typeof listScheduleSets;
     saveExercises?: typeof replaceSetExercises;
     searchExercises?: typeof listExercises;
+    loadSuggested?: typeof listSuggested;
     addCatalogExercise?: typeof createExercise;
   } = $props();
 
   let current: TrainingSet | null = $state(null);
   let query = $state('');
   let results: Exercise[] = $state([]);
+  let recent: Exercise[] = $state([]);
+  let frequent: Exercise[] = $state([]);
   let error = $state('');
   let newName = $state('');
   let newMuscle = $state('');
@@ -47,6 +52,10 @@
   $effect(() => {
     void query;
     void search();
+  });
+
+  $effect(() => {
+    void loadTips();
   });
 
   async function refresh() {
@@ -71,6 +80,17 @@
       return;
     }
     results = result.exercises;
+  }
+
+  async function loadTips() {
+    const result = await loadSuggested();
+    if (!result.ok) {
+      recent = [];
+      frequent = [];
+      return;
+    }
+    recent = result.recent;
+    frequent = result.frequent;
   }
 
   function idsFrom(exercises: SetExercise[]): number[] {
@@ -181,6 +201,10 @@
         </li>
       {/each}
     </ul>
+  {/if}
+
+  {#if query === ''}
+    <SuggestedExercises {recent} {frequent} onPick={(exercise) => void handlePick(exercise)} />
   {/if}
 
   <ExerciseSearch {query} {results} onQuery={(value) => (query = value)} onPick={(exercise) => void handlePick(exercise)} />

@@ -26,7 +26,8 @@
     },
     "scripts": {
         "test": "phpunit",
-        "infection": "infection --min-msi=80 --threads=4"
+        "infection": "infection --min-msi=80 --threads=4",
+        "smoke": "php scripts/smoke.php"
     },
     "config": {
         "sort-packages": true,

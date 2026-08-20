@@ -15,5 +15,8 @@ describe('app.html device meta', () => {
     expect(html).toContain('viewport-fit=cover');
     expect(html).toContain('name="theme-color"');
     expect(html).toContain('#121212');
+    expect(html).toContain('rel="manifest"');
+    expect(html).toContain('manifest.webmanifest');
+    expect(html).toContain('apple-touch-icon');
   });
 });

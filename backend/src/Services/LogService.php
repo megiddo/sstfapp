@@ -7,6 +7,7 @@ namespace Sstf\Api\Services;
 use Sstf\Api\Domain\ExerciseLog;
 use Sstf\Api\Domain\ExerciseNotOnSetException;
 use Sstf\Api\Domain\HistoryDay;
+use Sstf\Api\Domain\HistoryFilters;
 use Sstf\Api\Domain\HistoryGrouper;
 use Sstf\Api\Domain\InvalidLogException;
 use Sstf\Api\Domain\SetExercise;
@@ -85,16 +86,19 @@ final class LogService
     /**
      * @return list<HistoryDay>
      */
-    public function history(string $emailHash): array
+    public function history(string $emailHash, HistoryFilters $filters): array
     {
         $account = $this->accounts->loadAccount($emailHash);
         if ($account === null) {
             throw new UnauthenticatedException();
         }
 
-        return HistoryGrouper::groupByDay(
-            $this->logs->listAll($emailHash),
-            $account->timezone,
+        return HistoryGrouper::inDateRange(
+            HistoryGrouper::groupByDay(
+                $this->logs->listAll($emailHash, $filters->exerciseId),
+                $account->timezone,
+            ),
+            $filters,
         );
     }
 

@@ -104,11 +104,33 @@ export function groupConsecutiveSets(logs: HistoryLog[]): HistorySetGroup[] {
   return groups;
 }
 
+export type HistoryFilters = {
+  from?: string;
+  to?: string;
+  exercise_id?: number;
+};
+
+function logsPath(filters: HistoryFilters): string {
+  const params = new URLSearchParams();
+  if (filters.from !== undefined && filters.from !== '') {
+    params.set('from', filters.from);
+  }
+  if (filters.to !== undefined && filters.to !== '') {
+    params.set('to', filters.to);
+  }
+  if (filters.exercise_id !== undefined && Number.isInteger(filters.exercise_id) && filters.exercise_id >= 1) {
+    params.set('exercise_id', String(filters.exercise_id));
+  }
+  const query = params.toString();
+  return query === '' ? '/api/logs' : `/api/logs?${query}`;
+}
+
 export async function fetchHistory(
+  filters: HistoryFilters = {},
   fetcher: typeof fetch = fetch,
 ): Promise<{ ok: true; days: HistoryDayData[] } | ApiFail> {
   try {
-    const { status, body } = await apiFetch('/api/logs', { method: 'GET' }, fetcher);
+    const { status, body } = await apiFetch(logsPath(filters), { method: 'GET' }, fetcher);
     if (status !== 200) {
       return fail(status, body);
     }

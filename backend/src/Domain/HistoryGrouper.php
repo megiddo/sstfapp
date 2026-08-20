@@ -37,6 +37,22 @@ final class HistoryGrouper
         return $days;
     }
 
+    /**
+     * @param list<HistoryDay> $days
+     * @return list<HistoryDay>
+     */
+    public static function inDateRange(array $days, HistoryFilters $filters): array
+    {
+        $matched = [];
+        foreach ($days as $day) {
+            if ($filters->matchesDay($day->date)) {
+                $matched[] = $day;
+            }
+        }
+
+        return $matched;
+    }
+
     private static function localDay(string $loggedAt, DateTimeZone $timezone): string
     {
         try {

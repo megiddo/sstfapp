@@ -121,3 +121,40 @@ export async function createExercise(
     return fail(0, null);
   }
 }
+
+export async function listSuggested(
+  fetcher: typeof fetch = fetch,
+): Promise<
+  | { ok: true; recent: Exercise[]; frequent: Exercise[] }
+  | { ok: false; status: number; code: string; message: string }
+> {
+  try {
+    const { status, body } = await apiFetch('/api/exercises/suggested', { method: 'GET' }, fetcher);
+    if (status !== 200) {
+      return fail(status, body);
+    }
+    const data = parseApiData(body);
+    if (data === null || !Array.isArray(data.recent) || !Array.isArray(data.frequent)) {
+      return fail(status, body);
+    }
+    const recent: Exercise[] = [];
+    for (const item of data.recent) {
+      const parsed = parseExercise(item);
+      if (parsed === null) {
+        return fail(status, body);
+      }
+      recent.push(parsed);
+    }
+    const frequent: Exercise[] = [];
+    for (const item of data.frequent) {
+      const parsed = parseExercise(item);
+      if (parsed === null) {
+        return fail(status, body);
+      }
+      frequent.push(parsed);
+    }
+    return { ok: true, recent, frequent };
+  } catch {
+    return fail(0, null);
+  }
+}

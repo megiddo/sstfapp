@@ -11,7 +11,9 @@ use Slim\Psr7\Response;
 use Sstf\Api\Domain\EmailKey;
 use Sstf\Api\Domain\ExerciseLog;
 use Sstf\Api\Domain\HistoryDay;
+use Sstf\Api\Domain\HistoryFilters;
 use Sstf\Api\Domain\HistoryGrouper;
+use Sstf\Api\Domain\InvalidHistoryFilterException;
 use Sstf\Api\Domain\UnauthenticatedException;
 use Sstf\Api\Http\Controllers\ExportController;
 use Sstf\Api\Http\Controllers\LogController;
@@ -38,6 +40,8 @@ use Sstf\Api\Tests\Fakes\FakeClock;
 #[CoversClass(LogRepository::class)]
 #[CoversClass(HistoryGrouper::class)]
 #[CoversClass(HistoryDay::class)]
+#[CoversClass(HistoryFilters::class)]
+#[CoversClass(InvalidHistoryFilterException::class)]
 #[CoversClass(ExerciseLog::class)]
 #[CoversClass(UnauthenticatedException::class)]
 #[CoversClass(FileResponder::class)]
@@ -167,6 +171,43 @@ final class HistoryExportControllerTest extends TestCase
         $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         $this->assertSame('hist@example.com', $pdo->query('SELECT email FROM account WHERE id = 1')->fetchColumn());
         $this->assertSame(2, (int) $pdo->query('SELECT COUNT(*) FROM logs')->fetchColumn());
+    }
+
+    public function testIndexAppliesHistoryFilters(): void
+    {
+        $factory = new ServerRequestFactory();
+        $authed = $factory->createServerRequest('GET', '/api/logs')->withAttribute('email_hash', $this->hash);
+        $schedule = $this->schedules->create($this->hash, 'Hypertrophy');
+        $set = $this->sets->create($this->hash, $schedule->id, 'Evening', 3, 1080, 0);
+        $exerciseId = $this->sets->replaceExercises($this->hash, $set->id, [$this->firstExerciseId()])
+            ->exercises[0]->globalExerciseId;
+        $this->assertNotNull($exerciseId);
+        $this->logs->create($authed->withParsedBody([
+            'set_id' => $set->id,
+            'global_exercise_id' => $exerciseId,
+            'weight' => 185,
+            'reps' => 8,
+        ]), new Response());
+
+        $day = $this->logs->index($authed->withQueryParams([
+            'from' => '2026-08-19',
+            'to' => '2026-08-19',
+            'exercise_id' => (string) $exerciseId,
+        ]), new Response());
+        $this->assertSame(200, $day->getStatusCode());
+        $body = json_decode((string) $day->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertCount(1, $body['data']['days']);
+        $this->assertSame('2026-08-19', $body['data']['days'][0]['date']);
+
+        $none = $this->logs->index($authed->withQueryParams(['from' => '2026-08-21']), new Response());
+        $this->assertSame([], json_decode((string) $none->getBody(), true, 512, JSON_THROW_ON_ERROR)['data']['days']);
+
+        $missingEx = $this->logs->index($authed->withQueryParams(['exercise_id' => '99999']), new Response());
+        $this->assertSame([], json_decode((string) $missingEx->getBody(), true, 512, JSON_THROW_ON_ERROR)['data']['days']);
+
+        $bad = $this->logs->index($authed->withQueryParams(['from' => 'nope']), new Response());
+        $this->assertSame(400, $bad->getStatusCode());
+        $this->assertSame('invalid_request', json_decode((string) $bad->getBody(), true, 512, JSON_THROW_ON_ERROR)['error']['code']);
     }
 
     public function testExportRejectsInvalidHashNames(): void

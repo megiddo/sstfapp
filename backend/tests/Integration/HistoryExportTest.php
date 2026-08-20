@@ -8,7 +8,9 @@ use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
 use Sstf\Api\Domain\ExerciseLog;
 use Sstf\Api\Domain\HistoryDay;
+use Sstf\Api\Domain\HistoryFilters;
 use Sstf\Api\Domain\HistoryGrouper;
+use Sstf\Api\Domain\InvalidHistoryFilterException;
 use Sstf\Api\Domain\UnauthenticatedException;
 use Sstf\Api\Http\Controllers\ExportController;
 use Sstf\Api\Http\Controllers\LogController;
@@ -29,6 +31,8 @@ use Sstf\Api\Tests\HttpTestCase;
 #[CoversClass(UserDbFactory::class)]
 #[CoversClass(HistoryGrouper::class)]
 #[CoversClass(HistoryDay::class)]
+#[CoversClass(HistoryFilters::class)]
+#[CoversClass(InvalidHistoryFilterException::class)]
 #[CoversClass(ExerciseLog::class)]
 #[CoversClass(UnauthenticatedException::class)]
 #[CoversClass(FileResponder::class)]
@@ -95,6 +99,55 @@ final class HistoryExportTest extends HttpTestCase
         $this->assertSame(2, (int) $pdo->query('SELECT COUNT(*) FROM logs')->fetchColumn());
         $units = $pdo->query('SELECT DISTINCT weight_unit FROM logs')->fetchAll(PDO::FETCH_COLUMN);
         $this->assertSame(['lb'], $units);
+    }
+
+    public function testLogsAcceptFromToAndExerciseIdFilters(): void
+    {
+        $email = 'filt-' . bin2hex(random_bytes(4)) . '@example.com';
+        $this->signIn($email, 'America/Chicago');
+        $seeded = $this->seedEvening();
+
+        $this->freezeAt('2026-08-19 18:40:00', 'America/Chicago');
+        $this->request('POST', '/api/logs', [
+            'set_id' => $seeded['eveningId'],
+            'global_exercise_id' => $seeded['benchId'],
+            'weight' => 185,
+            'reps' => 8,
+        ]);
+        $this->freezeAt('2026-08-20 18:40:00', 'America/Chicago');
+        $this->request('POST', '/api/logs', [
+            'set_id' => $seeded['eveningId'],
+            'global_exercise_id' => $seeded['rowId'],
+            'weight' => 60,
+            'reps' => 10,
+        ]);
+
+        $from = $this->request('GET', '/api/logs?from=2026-08-20');
+        $this->assertSame(200, $from->getStatusCode());
+        $days = $this->json($from)['data']['days'];
+        $this->assertCount(1, $days);
+        $this->assertSame('2026-08-20', $days[0]['date']);
+        $this->assertSame('Barbell Row', $days[0]['logs'][0]['exercise_name']);
+
+        $to = $this->json($this->request('GET', '/api/logs?to=2026-08-19'))['data']['days'];
+        $this->assertCount(1, $to);
+        $this->assertSame('2026-08-19', $to[0]['date']);
+
+        $exercise = $this->json($this->request('GET', '/api/logs?exercise_id=' . $seeded['benchId']))['data']['days'];
+        $this->assertCount(1, $exercise);
+        $this->assertSame('Bench Press', $exercise[0]['logs'][0]['exercise_name']);
+
+        $range = $this->json($this->request(
+            'GET',
+            '/api/logs?from=2026-08-19&to=2026-08-20&exercise_id=' . $seeded['rowId'],
+        ))['data']['days'];
+        $this->assertCount(1, $range);
+        $this->assertSame('Barbell Row', $range[0]['logs'][0]['exercise_name']);
+
+        $bad = $this->request('GET', '/api/logs?from=not-a-day');
+        $this->assertSame(400, $bad->getStatusCode());
+        $this->assertSame('invalid_request', $this->json($bad)['error']['code']);
+        $this->assertSame('Invalid history filter', $this->json($bad)['error']['message']);
     }
 
     public function testExportIsOnlyTheSignedInUserFile(): void

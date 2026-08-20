@@ -65,6 +65,52 @@ docker compose -f docker/compose.dev.yml exec -T web npx stryker run
 
 Locked: PHP line coverage ≥ 95% on `backend/src`; Infection MSI ≥ 80%; Vitest line coverage ≥ 95% on `frontend/src/lib`; Stryker ≥ 70%.
 
+## Smoke test
+
+Provisions a throwaway user (fake Google verifier, `APP_ENV=testing`), seeds Hypertrophy / Wednesday Evening, logs one row, exports, and asserts the SQLite file exists. Uses the Slim bootstrap so it does not need a live GIS token. Exits non-zero on failure.
+
+```bash
+docker compose -f docker/compose.dev.yml exec -T api php scripts/smoke.php
+```
+
+Or `composer smoke` inside the api container. The script writes to a temp `DATA_PATH` and deletes it afterward.
+
+## Backup and restore
+
+Each account is one SQLite file: `data/users/{md5(normalized-email)}.sqlite`. MD5 is a stable filename, not a password hash. Email is lowercased and trimmed first.
+
+**Backup** — copy the files off the server:
+
+```bash
+mkdir -p ~/Backups/sstf
+cp data/users/*.sqlite ~/Backups/sstf/
+```
+
+`GET /api/export` (Settings → Download my data) is the same file the server uses.
+
+**Restore** — put that file back under the md5 name for the same Google (or password) email. A new machine can restore this way and sign in with the same email.
+
+1. Compute the filename, for example `echo -n 'you@gmail.com' | md5` (or `md5sum` / `md5 -s`).
+2. Stop the api process if it has the file open.
+3. Replace the file: `cp sstf-data.sqlite data/users/<hash>.sqlite` (Compose stores these in the `./data` host directory mounted at `/data`).
+4. Sign in with the **same Google email** (or the password you set on that account). The restored schedules and logs are there.
+
+Do not rename the file to a different hash. A different email opens a different file.
+
+## Google Cloud console (GIS)
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) create (or pick) a project.
+2. APIs & Services → Credentials → Create credentials → **OAuth client ID**.
+3. Application type: **Web application**.
+4. Authorized JavaScript origins:
+   - `http://localhost:5173` (Compose Vite)
+   - `http://localhost:8080` if you hit the API origin directly
+   - your production HTTPS origin when you deploy
+5. Authorized redirect URIs are not required for the GIS button (ID token to `/api/auth/google`). Add them only if you later use a redirect flow.
+6. Copy the client ID into `.env` as both `GOOGLE_CLIENT_ID` and `PUBLIC_GOOGLE_CLIENT_ID`.
+
+The login page loads `https://accounts.google.com` for the official button. Keep that origin in the CSP.
+
 ## Production (SPA + API, same origin)
 
 1. `docker compose -f docker/compose.dev.yml exec -T web npm run build` (or Node 22 locally in `frontend/`).

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import ScheduleListPage from './ScheduleListPage.svelte';
 import type { Schedule } from './schedules';
@@ -83,6 +83,14 @@ describe('ScheduleListPage', () => {
     });
 
     await fireEvent.click(screen.getAllByRole('button', { name: 'Archive' })[0]);
+    expect(screen.getByTestId('confirm-sheet')).toBeInTheDocument();
+    expect(makeArchived).not.toHaveBeenCalled();
+    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByTestId('confirm-sheet')).not.toBeInTheDocument();
+    expect(makeArchived).not.toHaveBeenCalled();
+
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Archive' })[0]);
+    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Archive' }));
     await waitFor(() => {
       expect(makeArchived).toHaveBeenCalled();
     });
@@ -141,6 +149,7 @@ describe('ScheduleListPage', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Schedule not found');
     });
     await fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Archive' }));
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Cannot archive');
     });

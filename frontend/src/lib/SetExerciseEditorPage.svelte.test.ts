@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import type { TrainingSet } from './schedules';
 import SetExerciseEditorPage from './SetExerciseEditorPage.svelte';
@@ -89,6 +89,36 @@ describe('SetExerciseEditorPage', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     expect(navigate).toHaveBeenCalledWith('/schedules/1');
+  });
+
+  it('shows recent and frequent suggestions above search', async () => {
+    const saveExercises = vi.fn(async () => ({ ok: true as const, set: evening }));
+    render(SetExerciseEditorPage, {
+      props: {
+        scheduleId: 1,
+        setId: 9,
+        loadSets: async () => ({ ok: true as const, sets: [evening] }),
+        saveExercises,
+        searchExercises: async () => ({ ok: true as const, exercises: [squat] }),
+        loadSuggested: async () => ({
+          ok: true as const,
+          recent: [bench],
+          frequent: [squat],
+        }),
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('recent-exercises')).toHaveTextContent('Bench Press');
+    });
+    expect(screen.getByTestId('frequent-exercises')).toHaveTextContent('Squat');
+    await fireEvent.click(within(screen.getByTestId('recent-exercises')).getByRole('button', { name: 'Bench Press' }));
+    await waitFor(() => {
+      expect(saveExercises).toHaveBeenCalledWith(9, [1, 2, 1]);
+    });
+    await fireEvent.input(screen.getByLabelText('Search catalog'), { target: { value: 'sq' } });
+    await waitFor(() => {
+      expect(screen.queryByTestId('recent-exercises')).not.toBeInTheDocument();
+    });
   });
 
   it('creates a catalog exercise then adds it', async () => {
@@ -210,6 +240,12 @@ describe('SetExerciseEditorPage', () => {
           message: 'Exercise name already exists',
         }),
         searchExercises: async () => ({ ok: true as const, exercises: [] }),
+        loadSuggested: async () => ({
+          ok: false as const,
+          status: 401,
+          code: 'unauthenticated',
+          message: 'Authentication required',
+        }),
       },
     });
     await waitFor(() => {

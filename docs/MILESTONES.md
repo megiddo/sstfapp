@@ -146,17 +146,19 @@ Companion docs: [DESIGN.md](./DESIGN.md), [UI.md](./UI.md).
 
 **Goal:** Safer to run and nicer to use daily. Not a dump of new product ideas.
 
-- [ ] PWA manifest + icons (optional install)
-- [ ] Rate limits and basic security headers
-- [ ] Structured logging (no tokens, no emails in info logs — hash only)
-- [ ] Exercise search UX (recent / frequent)
-- [ ] History filters (exercise, date range)
-- [ ] Confirm archive schedule
-- [ ] 15-minute time picker that’s usable with gloves off but sweaty hands (large)
-- [ ] Smoke test script: provision, seed a week, log, export
-- [ ] README: backup (`cp data/users/*.sqlite`), restore, Google Cloud console setup
+- [x] PWA manifest + icons (optional install)
+- [x] Rate limits and basic security headers
+- [x] Structured logging (no tokens, no emails in info logs — hash only)
+- [x] Exercise search UX (recent / frequent)
+- [x] History filters (exercise, date range)
+- [x] Confirm archive schedule
+- [x] 15-minute time picker that’s usable with gloves off but sweaty hands (large)
+- [x] Smoke test script: provision, seed a week, log, export
+- [x] README: backup (`cp data/users/*.sqlite`), restore, Google Cloud console setup
 
 **Exit:** A new machine can restore from an exported file (documented manual replace) and log in with the same Google email.
+
+**Progress (M7):** 2026-08-20, branch `sstf-m7`. PHP line coverage **98.10%**; Infection MSI **88%** (covered MSI 90%); Svelte line coverage **97.52%** on `frontend/src/lib`; Stryker **76.69%**.
 
 ---
 

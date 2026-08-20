@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createExercise, listExercises } from './exercises';
+import { createExercise, listExercises, listSuggested } from './exercises';
 
 const bench = {
   id: 1,
@@ -170,6 +170,51 @@ describe('createExercise', () => {
 
     await expect(
       createExercise({ name: 'X' }, async () => {
+        throw new Error('offline');
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      status: 0,
+      code: 'invalid_request',
+      message: 'Request failed',
+    });
+  });
+});
+
+describe('listSuggested', () => {
+  it('loads recent and frequent rows', async () => {
+    const fetcher = vi.fn(async (path: string, init?: RequestInit) => {
+      expect(path).toBe('/api/exercises/suggested');
+      expect(init?.method).toBe('GET');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { recent: [bench], frequent: [bench] } }),
+      } as Response;
+    });
+    await expect(listSuggested(fetcher)).resolves.toEqual({
+      ok: true,
+      recent: [bench],
+      frequent: [bench],
+    });
+  });
+
+  it('maps errors and malformed payloads', async () => {
+    await expect(
+      listSuggested(jsonResponse(401, { error: { code: 'unauthenticated', message: 'Authentication required' } })),
+    ).resolves.toMatchObject({ ok: false, status: 401 });
+    await expect(listSuggested(jsonResponse(200, { data: { recent: 'nope', frequent: [] } }))).resolves.toMatchObject({
+      ok: false,
+    });
+    await expect(
+      listSuggested(jsonResponse(200, { data: { recent: [], frequent: [{ ...bench, id: 0 }] } })),
+    ).resolves.toMatchObject({ ok: false });
+    await expect(
+      listSuggested(jsonResponse(200, { data: { recent: [{ ...bench, name: '' }], frequent: [] } })),
+    ).resolves.toMatchObject({ ok: false });
+    await expect(listSuggested(jsonResponse(200, { data: {} }))).resolves.toMatchObject({ ok: false });
+    await expect(
+      listSuggested(async () => {
         throw new Error('offline');
       }),
     ).resolves.toEqual({

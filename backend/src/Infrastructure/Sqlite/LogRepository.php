@@ -6,6 +6,7 @@ namespace Sstf\Api\Infrastructure\Sqlite;
 
 use PDO;
 use Sstf\Api\Domain\ClockInterface;
+use Sstf\Api\Domain\Exercise;
 use Sstf\Api\Domain\ExerciseLog;
 use Sstf\Api\Domain\LogPrefill;
 
@@ -122,21 +123,76 @@ final class LogRepository
     /**
      * @return list<ExerciseLog>
      */
-    public function listAll(string $emailHash): array
+    public function listAll(string $emailHash, ?int $globalExerciseId = null): array
     {
         $pdo = $this->users->open($emailHash);
-        $stmt = $pdo->query(
-            'SELECT id, logged_at, schedule_id, schedule_name, set_id, set_name, set_day_of_week, set_start_minutes,
+        $sql = 'SELECT id, logged_at, schedule_id, schedule_name, set_id, set_name, set_day_of_week, set_start_minutes,
                     global_exercise_id, exercise_name, muscle_group, weight, weight_unit, reps, notes
-             FROM logs
-             ORDER BY logged_at DESC, id DESC',
-        );
+             FROM logs';
+        if ($globalExerciseId === null) {
+            $stmt = $pdo->query($sql . ' ORDER BY logged_at DESC, id DESC');
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            $stmt = $pdo->prepare($sql . ' WHERE global_exercise_id = :id ORDER BY logged_at DESC, id DESC');
+            $stmt->execute(['id' => $globalExerciseId]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+
         $logs = [];
-        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        foreach ($rows as $row) {
             $logs[] = $this->mapLog($row);
         }
 
         return $logs;
+    }
+
+    /**
+     * @return array{recent: list<Exercise>, frequent: list<Exercise>}
+     */
+    public function suggested(string $emailHash): array
+    {
+        $pdo = $this->users->open($emailHash);
+
+        return [
+            'recent' => $this->suggestedRows(
+                $pdo,
+                'SELECT global_exercise_id, exercise_name, muscle_group
+                 FROM logs
+                 WHERE global_exercise_id IS NOT NULL
+                 GROUP BY global_exercise_id
+                 ORDER BY MAX(logged_at) DESC, MAX(id) DESC
+                 LIMIT 8',
+            ),
+            'frequent' => $this->suggestedRows(
+                $pdo,
+                'SELECT global_exercise_id, exercise_name, muscle_group
+                 FROM logs
+                 WHERE global_exercise_id IS NOT NULL
+                 GROUP BY global_exercise_id
+                 ORDER BY COUNT(*) DESC, MAX(logged_at) DESC, MAX(id) DESC
+                 LIMIT 8',
+            ),
+        ];
+    }
+
+    /**
+     * @return list<Exercise>
+     */
+    private function suggestedRows(PDO $pdo, string $sql): array
+    {
+        $stmt = $pdo->query($sql);
+        $exercises = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $exercises[] = new Exercise(
+                (int) $row['global_exercise_id'],
+                (string) $row['exercise_name'],
+                $this->nullableString($row['muscle_group'] ?? null),
+                null,
+                null,
+            );
+        }
+
+        return $exercises;
     }
 
     /**

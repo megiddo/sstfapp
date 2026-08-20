@@ -17,6 +17,8 @@ import {
   parseNonNegativeInt,
   parseNonNegativeNumber,
   parseSetQuery,
+  quarterHourOptions,
+  snapMinutesToQuarter,
   timeInputToMinutes,
   todayDayOfWeek,
   WEEKDAY_SHORT,
@@ -152,5 +154,25 @@ describe('format', () => {
     expect(formatHeaderDate(wed, 'America/Chicago')).toMatch(/Aug/);
     expect(formatHeaderDate(wed, 'America/Chicago')).toMatch(/19/);
     expect(formatHeaderDate(wed, 'America/Chicago')).toMatch(/2026/);
+  });
+
+  it('snaps start minutes to 15-minute rows', () => {
+    expect(snapMinutesToQuarter(0)).toBe(0);
+    expect(snapMinutesToQuarter(7)).toBe(0);
+    expect(snapMinutesToQuarter(8)).toBe(15);
+    expect(snapMinutesToQuarter(1080)).toBe(1080);
+    expect(snapMinutesToQuarter(1081)).toBe(1080);
+    expect(snapMinutesToQuarter(1088)).toBe(1095);
+    expect(snapMinutesToQuarter(1439)).toBe(1425);
+    expect(snapMinutesToQuarter(1440)).toBe(1425);
+    expect(snapMinutesToQuarter(-15)).toBe(0);
+    expect(snapMinutesToQuarter(Number.NaN)).toBe(0);
+    expect(snapMinutesToQuarter(Number.POSITIVE_INFINITY)).toBe(0);
+    const options = quarterHourOptions();
+    expect(options).toHaveLength(96);
+    expect(options[0]).toBe(0);
+    expect(options[options.length - 1]).toBe(1425);
+    expect(options.includes(1080)).toBe(true);
+    expect(options.includes(1081)).toBe(false);
   });
 });

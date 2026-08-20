@@ -15,11 +15,15 @@ use Sstf\Api\Http\Controllers\ExerciseController;
 use Sstf\Api\Http\JsonResponder;
 use Sstf\Api\Infrastructure\Sqlite\ExerciseRepository;
 use Sstf\Api\Infrastructure\Sqlite\GlobalDb;
+use Sstf\Api\Infrastructure\Sqlite\LogRepository;
 use Sstf\Api\Infrastructure\Sqlite\Migrator;
+use Sstf\Api\Infrastructure\Sqlite\UserDbFactory;
 use Sstf\Api\Services\ExerciseService;
+use Sstf\Api\Services\SuggestedExerciseService;
 
 #[CoversClass(ExerciseController::class)]
 #[CoversClass(ExerciseService::class)]
+#[CoversClass(SuggestedExerciseService::class)]
 #[CoversClass(ExerciseRepository::class)]
 #[CoversClass(Exercise::class)]
 #[CoversClass(JsonResponder::class)]
@@ -115,6 +119,12 @@ final class ExerciseControllerTest extends TestCase
         $this->assertSame(200, $list->getStatusCode());
         $this->assertStringContainsString('Custom Fly', (string) $list->getBody());
 
+        $suggestedUnauth = $controller->suggested(
+            $factory->createServerRequest('GET', '/api/exercises/suggested'),
+            new Response(),
+        );
+        $this->assertSame(401, $suggestedUnauth->getStatusCode());
+
         $arrayQ = $controller->index(
             $factory->createServerRequest('GET', '/api/exercises')
                 ->withAttribute('email_hash', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
@@ -134,9 +144,12 @@ final class ExerciseControllerTest extends TestCase
             new Migrator(),
             $root . '/migrations/global',
         );
+        mkdir($this->tmp . '/users', 0700, true);
+        $users = new UserDbFactory($this->tmp . '/users', new Migrator(), $root . '/migrations/user');
 
         return new ExerciseController(
             new ExerciseService(new ExerciseRepository($global, $clock ?? new SystemClock())),
+            new SuggestedExerciseService(new LogRepository($users, $clock ?? new SystemClock())),
         );
     }
 

@@ -10,11 +10,13 @@ use Sstf\Api\Domain\DuplicateExerciseNameException;
 use Sstf\Api\Domain\InvalidExerciseException;
 use Sstf\Api\Http\JsonResponder;
 use Sstf\Api\Services\ExerciseService;
+use Sstf\Api\Services\SuggestedExerciseService;
 
 final class ExerciseController
 {
     public function __construct(
         private readonly ExerciseService $exercises,
+        private readonly SuggestedExerciseService $suggestions,
     ) {
     }
 
@@ -31,6 +33,29 @@ final class ExerciseController
         }
 
         return JsonResponder::data(['exercises' => $payload]);
+    }
+
+    public function suggested(Request $request, Response $response): Response
+    {
+        $hash = $this->emailHash($request);
+        if ($hash === null) {
+            return JsonResponder::error('unauthenticated', 'Authentication required', 401);
+        }
+
+        $suggested = $this->suggestions->forUser($hash);
+        $recent = [];
+        foreach ($suggested['recent'] as $item) {
+            $recent[] = $item->toApi();
+        }
+        $frequent = [];
+        foreach ($suggested['frequent'] as $item) {
+            $frequent[] = $item->toApi();
+        }
+
+        return JsonResponder::data([
+            'recent' => $recent,
+            'frequent' => $frequent,
+        ]);
     }
 
     public function create(Request $request, Response $response): Response
@@ -69,9 +94,17 @@ final class ExerciseController
 
     private function isAuthenticated(Request $request): bool
     {
-        $hash = $request->getAttribute('email_hash');
+        return $this->emailHash($request) !== null;
+    }
 
-        return is_string($hash) && $hash !== '';
+    private function emailHash(Request $request): ?string
+    {
+        $hash = $request->getAttribute('email_hash');
+        if (!is_string($hash) || $hash === '') {
+            return null;
+        }
+
+        return $hash;
     }
 
     private function queryTerm(Request $request): ?string

@@ -8,6 +8,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use Sstf\Api\Http\Controllers\HealthController;
 use Sstf\Api\Http\JsonErrorHandler;
 use Sstf\Api\Http\JsonResponder;
+use Sstf\Api\Http\Middleware\RequestLog;
+use Sstf\Api\Http\Middleware\SecurityHeaders;
 use Sstf\Api\Infrastructure\Sqlite\GlobalDb;
 use Sstf\Api\Infrastructure\Sqlite\Migrator;
 use Sstf\Api\Infrastructure\Sqlite\SqliteConnection;
@@ -18,6 +20,8 @@ use Sstf\Api\Tests\HttpTestCase;
 #[CoversClass(HealthService::class)]
 #[CoversClass(JsonResponder::class)]
 #[CoversClass(JsonErrorHandler::class)]
+#[CoversClass(SecurityHeaders::class)]
+#[CoversClass(RequestLog::class)]
 #[CoversClass(GlobalDb::class)]
 #[CoversClass(Migrator::class)]
 #[CoversClass(SqliteConnection::class)]
@@ -29,6 +33,14 @@ final class HealthEndpointTest extends HttpTestCase
 
         $this->assertSame(200, $response->getStatusCode());
         $this->assertSame('application/json', $response->getHeaderLine('Content-Type'));
+        $this->assertSame('nosniff', $response->getHeaderLine('X-Content-Type-Options'));
+        $this->assertSame('no-referrer', $response->getHeaderLine('Referrer-Policy'));
+        $this->assertSame('DENY', $response->getHeaderLine('X-Frame-Options'));
+        $this->assertStringContainsString('https://accounts.google.com', $response->getHeaderLine('Content-Security-Policy'));
+        $this->assertNotSame('', $response->getHeaderLine('X-Request-Id'));
+
+        $echo = $this->request('GET', '/api/health', null, ['X-Request-Id' => 'smoke-health-1']);
+        $this->assertSame('smoke-health-1', $echo->getHeaderLine('X-Request-Id'));
 
         $payload = $this->json($response);
         $this->assertSame(['data' => ['ok' => true]], $payload);

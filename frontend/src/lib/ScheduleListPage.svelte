@@ -1,5 +1,6 @@
 <script lang="ts">
   import ActivePill from './ActivePill.svelte';
+  import ConfirmSheet from './ConfirmSheet.svelte';
   import EmptyState from './EmptyState.svelte';
   import PhoneShell from './PhoneShell.svelte';
   import {
@@ -28,6 +29,7 @@
   let name = $state('');
   let error = $state('');
   let loaded = $state(false);
+  let archiveId = $state<number | null>(null);
 
   $effect(() => {
     void refresh();
@@ -65,6 +67,7 @@
 
   async function handleArchive(id: number) {
     const result = await makeArchived(id);
+    archiveId = null;
     if (!result.ok) {
       error = result.message;
       return;
@@ -104,7 +107,7 @@
               Activate
             </button>
           {/if}
-          <button type="button" class="secondary" onclick={() => handleArchive(schedule.id)}>
+          <button type="button" class="secondary" onclick={() => (archiveId = schedule.id)}>
             Archive
           </button>
         </div>
@@ -126,6 +129,20 @@
     <button type="submit">New schedule</button>
   </form>
 </PhoneShell>
+
+{#if archiveId !== null}
+  <ConfirmSheet
+    title="Archive this schedule?"
+    message="Logs stay. You can still read history."
+    confirmLabel="Archive"
+    onConfirm={() => {
+      if (archiveId !== null) {
+        void handleArchive(archiveId);
+      }
+    }}
+    onCancel={() => (archiveId = null)}
+  />
+{/if}
 
 <style>
   .error {

@@ -21,6 +21,7 @@ return static function (App $app): void {
     $app->get('/api/me', [MeController::class, 'me']);
     $app->patch('/api/me', [MeController::class, 'patch']);
     $app->get('/api/exercises', [ExerciseController::class, 'index']);
+    $app->get('/api/exercises/suggested', [ExerciseController::class, 'suggested']);
     $app->post('/api/exercises', [ExerciseController::class, 'create']);
     $app->post('/api/auth/google', [AuthController::class, 'google'])
         ->add($json);

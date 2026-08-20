@@ -47,7 +47,7 @@ describe('WeekEditorPage', () => {
     });
     expect(screen.getByLabelText('Set name')).toHaveValue('Evening');
     expect(screen.getByText(/2 exercises/)).toBeInTheDocument();
-    expect(screen.getByText(/6:00 PM/)).toBeInTheDocument();
+    expect(screen.getAllByText(/6:00 PM/).length).toBeGreaterThan(0);
 
     await fireEvent.click(screen.getByRole('tab', { name: 'Monday' }));
     expect(screen.getByText('No sets on this day yet.')).toBeInTheDocument();
@@ -105,13 +105,15 @@ describe('WeekEditorPage', () => {
     await waitFor(() => {
       expect(saveSet).toHaveBeenCalledWith(9, { name: 'Night' });
     });
-    await fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '19:00' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Start time' }));
+    expect(screen.getByTestId('time-picker')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: '7:00 PM' }));
     await waitFor(() => {
       expect(saveSet).toHaveBeenCalledWith(9, { start_minutes: 1140 });
     });
   });
 
-  it('rejects invalid time and failed loads', async () => {
+  it('shows load errors and add-set API errors', async () => {
     render(WeekEditorPage, {
       props: {
         scheduleId: 1,
@@ -133,7 +135,6 @@ describe('WeekEditorPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Schedule not found');
     });
-    await fireEvent.change(screen.getByLabelText('New start time'), { target: { value: 'nope' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Add set' }));
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Invalid set');
@@ -187,19 +188,47 @@ describe('WeekEditorPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Could not save');
     });
-    await fireEvent.change(screen.getByLabelText('Start time'), { target: { value: 'nope' } });
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent('Invalid set');
-    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Start time' }));
     saveSet.mockResolvedValueOnce({
       ok: false as const,
       status: 400,
       code: 'invalid_request',
       message: 'Bad time',
     });
-    await fireEvent.change(screen.getByLabelText('Start time'), { target: { value: '19:15' } });
+    await fireEvent.click(screen.getByRole('button', { name: '7:15 PM' }));
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Bad time');
+    });
+  });
+
+  it('picks a new set time from the 15-minute sheet and can cancel', async () => {
+    const makeSet = vi.fn(async () => ({ ok: true as const, set: evening }));
+    render(WeekEditorPage, {
+      props: {
+        scheduleId: 1,
+        today: () => 3,
+        loadSets: async () => ({ ok: true as const, sets: [] }),
+        makeSet,
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'New start time' })).toHaveTextContent('6:00 PM');
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'New start time' }));
+    expect(screen.getByTestId('time-picker')).toBeInTheDocument();
+    expect(screen.getAllByTestId('time-option').length).toBe(96);
+    await fireEvent.click(screen.getByRole('button', { name: 'Close time picker' }));
+    expect(screen.queryByTestId('time-picker')).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'New start time' }));
+    await fireEvent.click(screen.getByRole('button', { name: '7:00 PM' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Add set' }));
+    await waitFor(() => {
+      expect(makeSet).toHaveBeenCalledWith(1, {
+        name: 'Evening',
+        day_of_week: 3,
+        start_minutes: 1140,
+        sort_order: 0,
+      });
     });
   });
 

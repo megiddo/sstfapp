@@ -7,7 +7,9 @@ namespace Sstf\Api\Http\Controllers;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Sstf\Api\Domain\ExerciseNotOnSetException;
+use Sstf\Api\Domain\InvalidHistoryFilterException;
 use Sstf\Api\Domain\InvalidLogException;
+use Sstf\Api\Domain\HistoryFilters;
 use Sstf\Api\Domain\SetNotFoundException;
 use Sstf\Api\Domain\UnauthenticatedException;
 use Sstf\Api\Http\JsonResponder;
@@ -28,7 +30,10 @@ final class LogController
         }
 
         try {
-            $days = $this->logs->history($hash);
+            $filters = HistoryFilters::fromQuery($request->getQueryParams());
+            $days = $this->logs->history($hash, $filters);
+        } catch (InvalidHistoryFilterException) {
+            return JsonResponder::error('invalid_request', 'Invalid history filter', 400);
         } catch (UnauthenticatedException) {
             return JsonResponder::error('unauthenticated', 'Authentication required', 401);
         }

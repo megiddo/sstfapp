@@ -13,12 +13,16 @@ use Sstf\Api\Http\Controllers\ExerciseController;
 use Sstf\Api\Http\JsonResponder;
 use Sstf\Api\Http\Middleware\SessionAuth;
 use Sstf\Api\Infrastructure\Sqlite\ExerciseRepository;
+use Sstf\Api\Infrastructure\Sqlite\LogRepository;
 use Sstf\Api\Services\ExerciseService;
+use Sstf\Api\Services\SuggestedExerciseService;
 use Sstf\Api\Tests\HttpTestCase;
 
 #[CoversClass(ExerciseController::class)]
 #[CoversClass(ExerciseService::class)]
+#[CoversClass(SuggestedExerciseService::class)]
 #[CoversClass(ExerciseRepository::class)]
+#[CoversClass(LogRepository::class)]
 #[CoversClass(Exercise::class)]
 #[CoversClass(DuplicateExerciseNameException::class)]
 #[CoversClass(SessionAuth::class)]
@@ -186,5 +190,66 @@ final class ExercisesTest extends HttpTestCase
              VALUES ('B', 0, " . $pdo->quote($now) . ', ' . $pdo->quote($now) . ')',
         );
         $this->assertSame(2, (int) $pdo->query('SELECT COUNT(*) FROM schedules')->fetchColumn());
+    }
+
+    public function testSuggestedExercisesComeFromLogs(): void
+    {
+        $this->signIn('suggest-' . bin2hex(random_bytes(4)) . '@example.com', 'UTC');
+        $empty = $this->request('GET', '/api/exercises/suggested');
+        $this->assertSame(200, $empty->getStatusCode());
+        $this->assertSame([], $this->json($empty)['data']['recent']);
+        $this->assertSame([], $this->json($empty)['data']['frequent']);
+
+        $schedule = $this->json($this->request('POST', '/api/schedules', ['name' => 'Hypertrophy']))['data'];
+        $evening = $this->json($this->request('POST', '/api/schedules/' . $schedule['id'] . '/sets', [
+            'name' => 'Evening',
+            'day_of_week' => 3,
+            'start_minutes' => 1080,
+        ]))['data'];
+        $catalog = $this->json($this->request('GET', '/api/exercises'))['data']['exercises'];
+        $byName = [];
+        foreach ($catalog as $row) {
+            $byName[$row['name']] = $row;
+        }
+        $this->request('PUT', '/api/sets/' . $evening['id'] . '/exercises', [
+            'exercises' => [
+                ['global_exercise_id' => $byName['Bench Press']['id']],
+                ['global_exercise_id' => $byName['Squat']['id']],
+            ],
+        ]);
+        $this->request('POST', '/api/logs', [
+            'set_id' => $evening['id'],
+            'global_exercise_id' => $byName['Squat']['id'],
+            'weight' => 225,
+            'reps' => 5,
+        ]);
+        $this->request('POST', '/api/logs', [
+            'set_id' => $evening['id'],
+            'global_exercise_id' => $byName['Bench Press']['id'],
+            'weight' => 185,
+            'reps' => 8,
+        ]);
+        $this->request('POST', '/api/logs', [
+            'set_id' => $evening['id'],
+            'global_exercise_id' => $byName['Bench Press']['id'],
+            'weight' => 190,
+            'reps' => 6,
+        ]);
+
+        $suggested = $this->json($this->request('GET', '/api/exercises/suggested'))['data'];
+        $recentNames = array_column($suggested['recent'], 'name');
+        $frequentNames = array_column($suggested['frequent'], 'name');
+        $this->assertSame('Bench Press', $recentNames[0]);
+        $this->assertContains('Squat', $recentNames);
+        $this->assertSame('Bench Press', $frequentNames[0]);
+        $this->assertSame($byName['Bench Press']['id'], $suggested['recent'][0]['id']);
+        $this->assertNull($suggested['recent'][0]['equipment']);
+    }
+
+    public function testSuggestedRequiresSession(): void
+    {
+        $response = $this->request('GET', '/api/exercises/suggested');
+        $this->assertSame(401, $response->getStatusCode());
+        $this->assertSame('unauthenticated', $this->json($response)['error']['code']);
     }
 }

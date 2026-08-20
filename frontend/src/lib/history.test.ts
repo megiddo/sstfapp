@@ -47,11 +47,38 @@ describe('history API helpers', () => {
       } as Response;
     });
 
-    await expect(fetchHistory(fetcher)).resolves.toEqual({ ok: true, days: twoDays });
+    await expect(fetchHistory({}, fetcher)).resolves.toEqual({ ok: true, days: twoDays });
+  });
+
+  it('encodes from, to, and exercise_id', async () => {
+    const fetcher = vi.fn(async (path: string) => {
+      expect(path).toBe('/api/logs?from=2026-08-19&to=2026-08-20&exercise_id=4');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { days: twoDays } }),
+      } as Response;
+    });
+    await expect(
+      fetchHistory({ from: '2026-08-19', to: '2026-08-20', exercise_id: 4 }, fetcher),
+    ).resolves.toEqual({ ok: true, days: twoDays });
+
+    const open = vi.fn(async (path: string) => {
+      expect(path).toBe('/api/logs');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { days: twoDays } }),
+      } as Response;
+    });
+    await expect(fetchHistory({ from: '', to: '', exercise_id: 0 }, open)).resolves.toEqual({
+      ok: true,
+      days: twoDays,
+    });
   });
 
   it('accepts an empty history list', async () => {
-    await expect(fetchHistory(jsonResponse(200, { data: { days: [] } }))).resolves.toEqual({
+    await expect(fetchHistory({}, jsonResponse(200, { data: { days: [] } }))).resolves.toEqual({
       ok: true,
       days: [],
     });
@@ -59,7 +86,7 @@ describe('history API helpers', () => {
 
   it('maps errors and malformed days', async () => {
     await expect(
-      fetchHistory(jsonResponse(401, { error: { code: 'unauthenticated', message: 'Authentication required' } })),
+      fetchHistory({}, jsonResponse(401, { error: { code: 'unauthenticated', message: 'Authentication required' } })),
     ).resolves.toEqual({
       ok: false,
       status: 401,
@@ -67,58 +94,58 @@ describe('history API helpers', () => {
       message: 'Authentication required',
     });
 
-    await expect(fetchHistory(jsonResponse(200, { data: { days: 'nope' } }))).resolves.toMatchObject({
+    await expect(fetchHistory({}, jsonResponse(200, { data: { days: 'nope' } }))).resolves.toMatchObject({
       ok: false,
       status: 200,
     });
-    await expect(fetchHistory(jsonResponse(200, { data: {} }))).resolves.toMatchObject({ ok: false });
-    await expect(fetchHistory(jsonResponse(200, { data: { days: [{ date: '', logs: [] }] } }))).resolves.toMatchObject({
+    await expect(fetchHistory({}, jsonResponse(200, { data: {} }))).resolves.toMatchObject({ ok: false });
+    await expect(fetchHistory({}, jsonResponse(200, { data: { days: [{ date: '', logs: [] }] } }))).resolves.toMatchObject({
       ok: false,
     });
-    await expect(fetchHistory(jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: 'nope' }] } }))).resolves.toMatchObject({
+    await expect(fetchHistory({}, jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: 'nope' }] } }))).resolves.toMatchObject({
       ok: false,
     });
     await expect(
-      fetchHistory(jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, id: 0 }] }] } })),
+      fetchHistory({}, jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, id: 0 }] }] } })),
     ).resolves.toMatchObject({ ok: false });
     await expect(
-      fetchHistory(jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, logged_at: '' }] }] } })),
+      fetchHistory({}, jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, logged_at: '' }] }] } })),
     ).resolves.toMatchObject({ ok: false });
     await expect(
-      fetchHistory(jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, set_name: '' }] }] } })),
+      fetchHistory({}, jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, set_name: '' }] }] } })),
     ).resolves.toMatchObject({ ok: false });
     await expect(
-      fetchHistory(
+      fetchHistory({}, 
         jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, exercise_name: '' }] }] } }),
       ),
     ).resolves.toMatchObject({ ok: false });
     await expect(
-      fetchHistory(jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, weight: -1 }] }] } })),
+      fetchHistory({}, jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, weight: -1 }] }] } })),
     ).resolves.toMatchObject({ ok: false });
     await expect(
-      fetchHistory(
+      fetchHistory({}, 
         jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, weight_unit: 'st' }] }] } }),
       ),
     ).resolves.toMatchObject({ ok: false });
     await expect(
-      fetchHistory(jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, reps: 1.5 }] }] } })),
+      fetchHistory({}, jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, reps: 1.5 }] }] } })),
     ).resolves.toMatchObject({ ok: false });
     await expect(
-      fetchHistory(jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, reps: -1 }] }] } })),
+      fetchHistory({}, jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, reps: -1 }] }] } })),
     ).resolves.toMatchObject({ ok: false });
-    await expect(fetchHistory(jsonResponse(200, { data: { days: [null] } }))).resolves.toMatchObject({ ok: false });
+    await expect(fetchHistory({}, jsonResponse(200, { data: { days: [null] } }))).resolves.toMatchObject({ ok: false });
     await expect(
-      fetchHistory(jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, id: 1.5 }] }] } })),
+      fetchHistory({}, jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, id: 1.5 }] }] } })),
     ).resolves.toMatchObject({ ok: false });
     await expect(
-      fetchHistory(
+      fetchHistory({}, 
         jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, weight: Number.NaN }] }] } }),
       ),
     ).resolves.toMatchObject({ ok: false });
     await expect(
-      fetchHistory(jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, reps: 1.2 }] }] } })),
+      fetchHistory({}, jsonResponse(200, { data: { days: [{ date: '2026-08-19', logs: [{ ...bench, reps: 1.2 }] }] } })),
     ).resolves.toMatchObject({ ok: false });
-    await expect(fetchHistory(jsonResponse(500, {}))).resolves.toMatchObject({
+    await expect(fetchHistory({}, jsonResponse(500, {}))).resolves.toMatchObject({
       ok: false,
       code: 'invalid_request',
     });
@@ -126,7 +153,7 @@ describe('history API helpers', () => {
     const boom = vi.fn(async () => {
       throw new Error('offline');
     }) as unknown as typeof fetch;
-    await expect(fetchHistory(boom)).resolves.toEqual({
+    await expect(fetchHistory({}, boom)).resolves.toEqual({
       ok: false,
       status: 0,
       code: 'invalid_request',

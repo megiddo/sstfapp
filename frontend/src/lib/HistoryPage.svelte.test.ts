@@ -1,5 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
+import { describe, expect, it, vi } from 'vitest';
 import HistoryPage from './HistoryPage.svelte';
 import type { HistoryDayData } from './history';
 
@@ -39,6 +39,7 @@ describe('HistoryPage', () => {
     render(HistoryPage, {
       props: {
         loadHistory: async () => ({ ok: true as const, days: twoDays }),
+        loadExercises: async () => ({ ok: true as const, exercises: [] }),
       },
     });
     await waitFor(() => {
@@ -53,6 +54,7 @@ describe('HistoryPage', () => {
     render(HistoryPage, {
       props: {
         loadHistory: async () => ({ ok: true as const, days: [] }),
+        loadExercises: async () => ({ ok: true as const, exercises: [] }),
       },
     });
     await waitFor(() => {
@@ -69,10 +71,38 @@ describe('HistoryPage', () => {
           code: 'unauthenticated',
           message: 'Authentication required',
         }),
+        loadExercises: async () => ({ ok: true as const, exercises: [] }),
       },
     });
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Authentication required');
     });
+  });
+
+  it('filters by date range and exercise on a phone column', async () => {
+    const loadHistory = vi.fn(async () => ({ ok: true as const, days: twoDays }));
+    render(HistoryPage, {
+      props: {
+        loadHistory,
+        loadExercises: async () => ({
+          ok: true as const,
+          exercises: [{ id: 1, name: 'Bench Press', muscle_group: 'Chest', equipment: 'Barbell', notes: null }],
+        }),
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'Bench Press' })).toBeInTheDocument();
+    });
+    await fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-08-19' } });
+    await fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-08-20' } });
+    await fireEvent.change(screen.getByLabelText('Exercise'), { target: { value: '1' } });
+    await waitFor(() => {
+      expect(loadHistory).toHaveBeenCalledWith({
+        from: '2026-08-19',
+        to: '2026-08-20',
+        exercise_id: 1,
+      });
+    });
+    expect(screen.getByLabelText('Exercise')).toBeInTheDocument();
   });
 });

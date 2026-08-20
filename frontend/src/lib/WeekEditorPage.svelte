@@ -2,7 +2,8 @@
   import DayChips from './DayChips.svelte';
   import EmptyState from './EmptyState.svelte';
   import PhoneShell from './PhoneShell.svelte';
-  import { DAY_NAMES, formatMinutes, minutesToTimeInput, timeInputToMinutes, todayDayOfWeek } from './format';
+  import TimePickerSheet from './TimePickerSheet.svelte';
+  import { DAY_NAMES, formatMinutes, snapMinutesToQuarter, todayDayOfWeek } from './format';
   import { createSet, listScheduleSets, patchSet, type TrainingSet } from './schedules';
 
   let {
@@ -25,9 +26,17 @@
   let sets: TrainingSet[] = $state([]);
   let error = $state('');
   let newName = $state('Evening');
-  let newTime = $state('18:00');
+  let newMinutes = $state(1080);
+  let pickerFor = $state<'new' | number | null>(null);
 
   const daySets = $derived(sets.filter((set) => set.day_of_week === selectedDay));
+  const pickerMinutes = $derived(
+    pickerFor === 'new'
+      ? newMinutes
+      : pickerFor === null
+        ? newMinutes
+        : snapMinutesToQuarter(sets.find((set) => set.id === pickerFor)?.start_minutes ?? newMinutes),
+  );
 
   $effect(() => {
     void scheduleId;
@@ -45,15 +54,10 @@
   }
 
   async function handleAdd() {
-    const minutes = timeInputToMinutes(newTime);
-    if (minutes === null) {
-      error = 'Invalid set';
-      return;
-    }
     const result = await makeSet(scheduleId, {
       name: newName,
       day_of_week: selectedDay,
-      start_minutes: minutes,
+      start_minutes: newMinutes,
       sort_order: daySets.length,
     });
     if (!result.ok) {
@@ -61,7 +65,7 @@
       return;
     }
     newName = 'Evening';
-    newTime = '18:00';
+    newMinutes = 1080;
     await refresh();
   }
 
@@ -74,18 +78,26 @@
     await refresh();
   }
 
-  async function handleTime(set: TrainingSet, value: string) {
-    const minutes = timeInputToMinutes(value);
-    if (minutes === null) {
-      error = 'Invalid set';
-      return;
-    }
-    const result = await saveSet(set.id, { start_minutes: minutes });
+  async function handleTime(setId: number, minutes: number) {
+    const result = await saveSet(setId, { start_minutes: minutes });
+    pickerFor = null;
     if (!result.ok) {
       error = result.message;
       return;
     }
     await refresh();
+  }
+
+  function handlePick(minutes: number) {
+    if (pickerFor === 'new') {
+      newMinutes = minutes;
+      pickerFor = null;
+      return;
+    }
+    if (pickerFor === null) {
+      return;
+    }
+    void handleTime(pickerFor, minutes);
   }
 </script>
 
@@ -113,12 +125,14 @@
           aria-label="Set name"
           onchange={(event) => void handleName(set, event.currentTarget.value)}
         />
-        <input
-          type="time"
-          value={minutesToTimeInput(set.start_minutes)}
+        <button
+          type="button"
+          class="time"
           aria-label="Start time"
-          onchange={(event) => void handleTime(set, event.currentTarget.value)}
-        />
+          onclick={() => (pickerFor = set.id)}
+        >
+          {formatMinutes(snapMinutesToQuarter(set.start_minutes))}
+        </button>
         <button
           type="button"
           class="open"
@@ -141,13 +155,19 @@
       New set name
       <input bind:value={newName} />
     </label>
-    <label>
-      New start time
-      <input type="time" bind:value={newTime} />
-    </label>
+    <button type="button" class="time" aria-label="New start time" onclick={() => (pickerFor = 'new')}>
+      {formatMinutes(newMinutes)}
+    </button>
     <button type="submit">Add set</button>
   </form>
 </PhoneShell>
+
+<TimePickerSheet
+  open={pickerFor !== null}
+  selectedMinutes={pickerMinutes}
+  onSelect={handlePick}
+  onClose={() => (pickerFor = null)}
+/>
 
 <style>
   .back {
@@ -191,6 +211,7 @@
     padding: 0 0.85rem;
   }
 
+  .time,
   .open {
     min-height: 48px;
     border: 0;
