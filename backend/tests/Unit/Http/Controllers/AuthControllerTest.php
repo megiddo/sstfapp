@@ -129,6 +129,81 @@ final class AuthControllerTest extends TestCase
         );
         $this->assertSame(401, $gone->getStatusCode());
 
+        $missingPatchHash = $meController->patch(
+            (new ServerRequestFactory())->createServerRequest('PATCH', '/api/me'),
+            new Response(),
+        );
+        $this->assertSame(401, $missingPatchHash->getStatusCode());
+
+        $emptyHash = $meController->patch(
+            (new ServerRequestFactory())->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', ''),
+            new Response(),
+        );
+        $this->assertSame(401, $emptyHash->getStatusCode());
+
+        $notArray = $meController->patch(
+            (new ServerRequestFactory())->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', $hash)
+                ->withParsedBody(null),
+            new Response(),
+        );
+        $this->assertSame(400, $notArray->getStatusCode());
+        $this->assertStringContainsString('invalid_request', (string) $notArray->getBody());
+
+        $badTzType = $meController->patch(
+            (new ServerRequestFactory())->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', $hash)
+                ->withParsedBody(['timezone' => 1]),
+            new Response(),
+        );
+        $this->assertSame(400, $badTzType->getStatusCode());
+        $this->assertStringContainsString('invalid_timezone', (string) $badTzType->getBody());
+
+        $badUnitType = $meController->patch(
+            (new ServerRequestFactory())->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', $hash)
+                ->withParsedBody(['weight_unit' => 1]),
+            new Response(),
+        );
+        $this->assertSame(400, $badUnitType->getStatusCode());
+        $this->assertStringContainsString('invalid_weight_unit', (string) $badUnitType->getBody());
+
+        $patched = $meController->patch(
+            (new ServerRequestFactory())->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', $hash)
+                ->withParsedBody(['timezone' => 'Europe/Berlin', 'weight_unit' => 'kg']),
+            new Response(),
+        );
+        $this->assertSame(200, $patched->getStatusCode());
+        $patchedJson = json_decode((string) $patched->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('Europe/Berlin', $patchedJson['data']['timezone']);
+        $this->assertSame('kg', $patchedJson['data']['weight_unit']);
+
+        $invalidTz = $meController->patch(
+            (new ServerRequestFactory())->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', $hash)
+                ->withParsedBody(['timezone' => 'Nope/Nope']),
+            new Response(),
+        );
+        $this->assertSame(400, $invalidTz->getStatusCode());
+
+        $invalidUnit = $meController->patch(
+            (new ServerRequestFactory())->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', $hash)
+                ->withParsedBody(['weight_unit' => 'st']),
+            new Response(),
+        );
+        $this->assertSame(400, $invalidUnit->getStatusCode());
+
+        $missingAccount = $meController->patch(
+            (new ServerRequestFactory())->createServerRequest('PATCH', '/api/me')
+                ->withAttribute('email_hash', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+                ->withParsedBody(['timezone' => 'UTC']),
+            new Response(),
+        );
+        $this->assertSame(401, $missingAccount->getStatusCode());
+
         $logout = $authController->logout(
             (new ServerRequestFactory())->createServerRequest('POST', '/api/auth/logout')
                 ->withCookieParams(['sstf_session' => $cookie]),

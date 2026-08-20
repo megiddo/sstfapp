@@ -33,4 +33,19 @@ final class IanaTimezone
 
         return $trimmed;
     }
+
+    public static function tryParse(string $name): ?string
+    {
+        $trimmed = trim($name);
+        if ($trimmed === '') {
+            return null;
+        }
+
+        $resolved = self::resolve($trimmed);
+        if ($resolved !== $trimmed) {
+            return null;
+        }
+
+        return $resolved;
+    }
 }

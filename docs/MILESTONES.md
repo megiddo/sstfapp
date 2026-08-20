@@ -55,13 +55,15 @@ Companion docs: [DESIGN.md](./DESIGN.md), [UI.md](./UI.md).
 
 **Goal:** Shared exercises exist; user DBs can hold schedules, sets, exercises, logs.
 
-- [ ] Global migration: `exercises`, seed list (enough to build a real week: push/pull/legs/hinge/core, common machines)
-- [ ] `GET /api/exercises` (+ `q` search)
-- [ ] `POST /api/exercises` (unique name, authenticated)
-- [ ] User migrations: `schedules`, `sets`, `set_exercises`, `logs`, partial unique index for one active schedule
-- [ ] `PATCH /api/me` for timezone and `weight_unit`
+- [x] Global migration: `exercises`, seed list (enough to build a real week: push/pull/legs/hinge/core, common machines)
+- [x] `GET /api/exercises` (+ `q` search)
+- [x] `POST /api/exercises` (unique name, authenticated)
+- [x] User migrations: `schedules`, `sets`, `set_exercises`, `logs`, partial unique index for one active schedule
+- [x] `PATCH /api/me` for timezone and `weight_unit`
 
 **Exit:** Seeded catalog is readable; a user DB after login has the training tables.
+
+**Progress (M2):** 2026-08-20, branch `sstf-m2`. PHP line coverage **97.69%**; Infection MSI **87%** (covered MSI 89%); Svelte line coverage **100%** on `frontend/src/lib`; Stryker **90.34%**.
 
 ---
 

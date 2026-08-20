@@ -8,7 +8,10 @@ use InvalidArgumentException;
 use Sstf\Api\Domain\AccountSnapshot;
 use Sstf\Api\Domain\EmailKey;
 use Sstf\Api\Domain\EmailUnverifiedException;
+use Sstf\Api\Domain\IanaTimezone;
 use Sstf\Api\Domain\InvalidGoogleIdTokenException;
+use Sstf\Api\Domain\InvalidTimezoneException;
+use Sstf\Api\Domain\InvalidWeightUnitException;
 use Sstf\Api\Domain\UnauthenticatedException;
 use Sstf\Api\Infrastructure\Google\GoogleIdTokenVerifierInterface;
 use Sstf\Api\Infrastructure\Session\SessionService;
@@ -55,6 +58,32 @@ final class AuthService
     public function me(string $emailHash): AccountSnapshot
     {
         $account = $this->users->loadAccount($emailHash);
+        if ($account === null) {
+            throw new UnauthenticatedException();
+        }
+
+        return $account;
+    }
+
+    public function updateMe(string $emailHash, ?string $timezone, ?string $weightUnit): AccountSnapshot
+    {
+        $resolvedTimezone = null;
+        if ($timezone !== null) {
+            $resolvedTimezone = IanaTimezone::tryParse($timezone);
+            if ($resolvedTimezone === null) {
+                throw new InvalidTimezoneException();
+            }
+        }
+
+        $resolvedUnit = null;
+        if ($weightUnit !== null) {
+            if ($weightUnit !== 'lb' && $weightUnit !== 'kg') {
+                throw new InvalidWeightUnitException();
+            }
+            $resolvedUnit = $weightUnit;
+        }
+
+        $account = $this->users->updateAccount($emailHash, $resolvedTimezone, $resolvedUnit);
         if ($account === null) {
             throw new UnauthenticatedException();
         }

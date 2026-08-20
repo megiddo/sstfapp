@@ -107,3 +107,44 @@ export async function signOut(fetcher: typeof fetch = fetch): Promise<void> {
     // Clearing the local session still proceeds even if the network call fails.
   }
 }
+
+export type PatchMeInput = {
+  timezone?: string;
+  weight_unit?: 'lb' | 'kg';
+};
+
+export type PatchMeResult =
+  | { ok: true; me: Me }
+  | { ok: false; status: number; code: string; message: string };
+
+export async function patchMe(
+  input: PatchMeInput,
+  fetcher: typeof fetch = fetch,
+): Promise<PatchMeResult> {
+  try {
+    const { status, body } = await apiFetch(
+      '/api/me',
+      {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      },
+      fetcher,
+    );
+    if (status !== 200) {
+      const error = parseApiError(body);
+      return {
+        ok: false,
+        status,
+        code: error?.code ?? 'invalid_request',
+        message: error?.message ?? 'Request failed',
+      };
+    }
+    const me = parseMe(body);
+    if (me === null) {
+      return { ok: false, status, code: 'invalid_request', message: 'Request failed' };
+    }
+    return { ok: true, me };
+  } catch {
+    return { ok: false, status: 0, code: 'invalid_request', message: 'Request failed' };
+  }
+}

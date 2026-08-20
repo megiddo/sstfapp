@@ -84,6 +84,48 @@ final class UserDirectory
         return $this->fetchAccount($pdo);
     }
 
+    public function updateAccount(string $emailHash, ?string $timezone, ?string $weightUnit): ?AccountSnapshot
+    {
+        if (!$this->users->exists($emailHash)) {
+            return null;
+        }
+
+        $pdo = $this->users->open($emailHash);
+        if ($timezone === null && $weightUnit === null) {
+            return $this->fetchAccount($pdo);
+        }
+
+        $now = $this->clock->now()->setTimezone(new \DateTimeZone('UTC'))->format('c');
+        if ($timezone !== null && $weightUnit !== null) {
+            $stmt = $pdo->prepare(
+                'UPDATE account SET timezone = :timezone, weight_unit = :weight_unit, updated_at = :updated_at WHERE id = 1',
+            );
+            $stmt->execute([
+                'timezone' => $timezone,
+                'weight_unit' => $weightUnit,
+                'updated_at' => $now,
+            ]);
+        } elseif ($timezone !== null) {
+            $stmt = $pdo->prepare(
+                'UPDATE account SET timezone = :timezone, updated_at = :updated_at WHERE id = 1',
+            );
+            $stmt->execute([
+                'timezone' => $timezone,
+                'updated_at' => $now,
+            ]);
+        } else {
+            $stmt = $pdo->prepare(
+                'UPDATE account SET weight_unit = :weight_unit, updated_at = :updated_at WHERE id = 1',
+            );
+            $stmt->execute([
+                'weight_unit' => $weightUnit,
+                'updated_at' => $now,
+            ]);
+        }
+
+        return $this->fetchAccount($pdo);
+    }
+
     private function fetchAccount(PDO $pdo): ?AccountSnapshot
     {
         $row = $pdo->query('SELECT email, timezone, weight_unit FROM account WHERE id = 1')->fetch();

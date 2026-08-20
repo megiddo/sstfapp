@@ -114,6 +114,19 @@ abstract class HttpTestCase extends TestCase
         return $this->dataDir . '/users/' . md5(strtolower(trim($email))) . '.sqlite';
     }
 
+    protected function signIn(string $email, ?string $timezone = null): void
+    {
+        $token = 'signin-' . $email . '-' . bin2hex(random_bytes(4));
+        $this->googleVerifier->willVerify($token, FakeGoogleIdTokenVerifier::user($email));
+        $body = ['id_token' => $token];
+        if ($timezone !== null) {
+            $body['timezone'] = $timezone;
+        }
+
+        $response = $this->request('POST', '/api/auth/google', $body);
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
     private function captureCookies(ResponseInterface $response): void
     {
         foreach ($response->getHeader('Set-Cookie') as $line) {

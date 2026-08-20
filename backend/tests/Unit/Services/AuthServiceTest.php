@@ -8,6 +8,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Sstf\Api\Domain\EmailUnverifiedException;
 use Sstf\Api\Domain\InvalidGoogleIdTokenException;
+use Sstf\Api\Domain\InvalidTimezoneException;
+use Sstf\Api\Domain\InvalidWeightUnitException;
 use Sstf\Api\Domain\SystemClock;
 use Sstf\Api\Domain\UnauthenticatedException;
 use Sstf\Api\Infrastructure\Session\FileSessionStore;
@@ -90,6 +92,62 @@ final class AuthServiceTest extends TestCase
         $service = $this->service(new FakeGoogleIdTokenVerifier());
         $this->expectException(UnauthenticatedException::class);
         $service->me('0123456789abcdef0123456789abcdef');
+    }
+
+    public function testUpdateMeTimezoneAndUnit(): void
+    {
+        $verifier = new FakeGoogleIdTokenVerifier();
+        $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('me@example.com'));
+        $service = $this->service($verifier);
+        $service->signInWithGoogle('tok', 'America/Chicago');
+        $hash = md5('me@example.com');
+
+        $tz = $service->updateMe($hash, 'Europe/Paris', null);
+        $this->assertSame('Europe/Paris', $tz->timezone);
+        $this->assertSame('lb', $tz->weightUnit);
+
+        $kg = $service->updateMe($hash, null, 'kg');
+        $this->assertSame('Europe/Paris', $kg->timezone);
+        $this->assertSame('kg', $kg->weightUnit);
+
+        $both = $service->updateMe($hash, 'UTC', 'lb');
+        $this->assertSame('UTC', $both->timezone);
+        $this->assertSame('lb', $both->weightUnit);
+
+        $noop = $service->updateMe($hash, null, null);
+        $this->assertSame('UTC', $noop->timezone);
+        $this->assertSame('lb', $noop->weightUnit);
+    }
+
+    public function testUpdateMeRejectsInvalidTimezoneAndUnit(): void
+    {
+        $verifier = new FakeGoogleIdTokenVerifier();
+        $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('bad@example.com'));
+        $service = $this->service($verifier);
+        $service->signInWithGoogle('tok', 'UTC');
+        $hash = md5('bad@example.com');
+
+        try {
+            $service->updateMe($hash, 'Not/A_Zone', null);
+            $this->fail('timezone');
+        } catch (InvalidTimezoneException) {
+        }
+
+        try {
+            $service->updateMe($hash, '', null);
+            $this->fail('empty timezone');
+        } catch (InvalidTimezoneException) {
+        }
+
+        $this->expectException(InvalidWeightUnitException::class);
+        $service->updateMe($hash, null, 'st');
+    }
+
+    public function testUpdateMeMissingAccountIsUnauthenticated(): void
+    {
+        $service = $this->service(new FakeGoogleIdTokenVerifier());
+        $this->expectException(UnauthenticatedException::class);
+        $service->updateMe('0123456789abcdef0123456789abcdef', 'UTC', 'kg');
     }
 
     private function service(FakeGoogleIdTokenVerifier $verifier): AuthService

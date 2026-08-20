@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Sstf\Api\Domain\ClockInterface;
 use Sstf\Api\Domain\SystemClock;
 use Sstf\Api\Http\Controllers\AuthController;
+use Sstf\Api\Http\Controllers\ExerciseController;
 use Sstf\Api\Http\Controllers\HealthController;
 use Sstf\Api\Http\Controllers\MeController;
 use Sstf\Api\Http\JsonErrorHandler;
@@ -18,11 +19,13 @@ use Sstf\Api\Infrastructure\Http\UrlFetcher;
 use Sstf\Api\Infrastructure\Session\FileSessionStore;
 use Sstf\Api\Infrastructure\Session\SessionCookie;
 use Sstf\Api\Infrastructure\Session\SessionService;
+use Sstf\Api\Infrastructure\Sqlite\ExerciseRepository;
 use Sstf\Api\Infrastructure\Sqlite\GlobalDb;
 use Sstf\Api\Infrastructure\Sqlite\Migrator;
 use Sstf\Api\Infrastructure\Sqlite\UserDbFactory;
 use Sstf\Api\Infrastructure\Sqlite\UserDirectory;
 use Sstf\Api\Services\AuthService;
+use Sstf\Api\Services\ExerciseService;
 use Sstf\Api\Services\HealthService;
 
 $settings = require __DIR__ . '/settings.php';
@@ -123,6 +126,21 @@ return [
 
     MeController::class => static function ($c): MeController {
         return new MeController($c->get(AuthService::class));
+    },
+
+    ExerciseRepository::class => static function ($c): ExerciseRepository {
+        return new ExerciseRepository(
+            $c->get(GlobalDb::class),
+            $c->get(ClockInterface::class),
+        );
+    },
+
+    ExerciseService::class => static function ($c): ExerciseService {
+        return new ExerciseService($c->get(ExerciseRepository::class));
+    },
+
+    ExerciseController::class => static function ($c): ExerciseController {
+        return new ExerciseController($c->get(ExerciseService::class));
     },
 
     SessionAuth::class => static function ($c): SessionAuth {

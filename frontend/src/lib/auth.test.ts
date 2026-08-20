@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchMe, signInWithGoogle, signOut } from './auth';
+import { fetchMe, patchMe, signInWithGoogle, signOut } from './auth';
 import { AUTH_ERROR_EMAIL_UNVERIFIED, AUTH_ERROR_GOOGLE_FAILED, messageForAuthCode } from './authErrors';
 import {
   isLoginPath,
@@ -327,5 +327,114 @@ describe('auth client', () => {
     await expect(signOut(async () => {
       throw new Error('offline');
     })).resolves.toBeUndefined();
+  });
+
+  it('patchMe updates timezone and unit', async () => {
+    const fetcher = vi.fn(async (path: string, init?: RequestInit) => {
+      expect(path).toBe('/api/me');
+      expect(init?.method).toBe('PATCH');
+      expect(init?.credentials).toBe('include');
+      expect(init?.body).toBe(JSON.stringify({ timezone: 'Europe/London', weight_unit: 'kg' }));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            email: 'a@b.com',
+            timezone: 'Europe/London',
+            weight_unit: 'kg',
+            identities: [{ provider: 'google' }],
+          },
+        }),
+      } as Response;
+    });
+
+    await expect(patchMe({ timezone: 'Europe/London', weight_unit: 'kg' }, fetcher)).resolves.toEqual({
+      ok: true,
+      me: {
+        email: 'a@b.com',
+        timezone: 'Europe/London',
+        weight_unit: 'kg',
+        identities: [{ provider: 'google' }],
+      },
+    });
+  });
+
+  it('patchMe maps 400, 401, malformed, and network errors', async () => {
+    const badTz = async () =>
+      ({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { code: 'invalid_timezone', message: 'Invalid timezone' } }),
+      }) as Response;
+    await expect(patchMe({ timezone: 'Nope' }, badTz)).resolves.toEqual({
+      ok: false,
+      status: 400,
+      code: 'invalid_timezone',
+      message: 'Invalid timezone',
+    });
+
+    const badUnit = async () =>
+      ({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { code: 'invalid_weight_unit', message: 'Invalid weight unit' } }),
+      }) as Response;
+    await expect(patchMe({ weight_unit: 'kg' }, badUnit)).resolves.toEqual({
+      ok: false,
+      status: 400,
+      code: 'invalid_weight_unit',
+      message: 'Invalid weight unit',
+    });
+
+    const unauthorized = async () =>
+      ({
+        ok: false,
+        status: 401,
+        json: async () => ({ error: { code: 'unauthenticated', message: 'Authentication required' } }),
+      }) as Response;
+    await expect(patchMe({ timezone: 'UTC' }, unauthorized)).resolves.toEqual({
+      ok: false,
+      status: 401,
+      code: 'unauthenticated',
+      message: 'Authentication required',
+    });
+
+    const noEnvelope = async () =>
+      ({
+        ok: false,
+        status: 500,
+        json: async () => ({}),
+      }) as Response;
+    await expect(patchMe({}, noEnvelope)).resolves.toEqual({
+      ok: false,
+      status: 500,
+      code: 'invalid_request',
+      message: 'Request failed',
+    });
+
+    const malformed = async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { email: 'a@b.com' } }),
+      }) as Response;
+    await expect(patchMe({ timezone: 'UTC' }, malformed)).resolves.toEqual({
+      ok: false,
+      status: 200,
+      code: 'invalid_request',
+      message: 'Request failed',
+    });
+
+    await expect(
+      patchMe({ timezone: 'UTC' }, async () => {
+        throw new Error('offline');
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      status: 0,
+      code: 'invalid_request',
+      message: 'Request failed',
+    });
   });
 });

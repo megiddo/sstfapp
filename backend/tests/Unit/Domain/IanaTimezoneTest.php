@@ -45,4 +45,17 @@ final class IanaTimezoneTest extends TestCase
         $this->assertSame('America/Chicago', IanaTimezone::resolve('  America/Chicago  '));
         $this->assertNotSame('UTC', IanaTimezone::resolve('  America/Chicago  '));
     }
+
+    public function testTryParseRejectsInvalidAndKeepsValid(): void
+    {
+        $this->assertSame('America/Chicago', IanaTimezone::tryParse('  America/Chicago  '));
+        $this->assertSame('UTC', IanaTimezone::tryParse('UTC'));
+        $this->assertNotSame('UTC', IanaTimezone::tryParse('America/Chicago'));
+        $this->assertNull(IanaTimezone::tryParse(''));
+        $this->assertNull(IanaTimezone::tryParse('   '));
+        $this->assertNull(IanaTimezone::tryParse('Not/A_Zone'));
+        $this->assertNull(IanaTimezone::tryParse('america/chicago'));
+        $this->assertSame('UTC', IanaTimezone::resolve('Not/A_Zone'));
+        $this->assertNotSame(IanaTimezone::resolve('Not/A_Zone'), IanaTimezone::tryParse('Not/A_Zone'));
+    }
 }
