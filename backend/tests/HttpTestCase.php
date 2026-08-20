@@ -10,7 +10,9 @@ use Psr\Http\Message\ResponseInterface;
 use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
+use Sstf\Api\Domain\ClockInterface;
 use Sstf\Api\Infrastructure\Google\GoogleIdTokenVerifierInterface;
+use Sstf\Api\Tests\Fakes\FakeClock;
 use Sstf\Api\Tests\Fakes\FakeGoogleIdTokenVerifier;
 
 abstract class HttpTestCase extends TestCase
@@ -18,6 +20,8 @@ abstract class HttpTestCase extends TestCase
     protected App $app;
 
     protected FakeGoogleIdTokenVerifier $googleVerifier;
+
+    protected FakeClock $clock;
 
     protected string $dataDir;
 
@@ -44,11 +48,13 @@ abstract class HttpTestCase extends TestCase
 
         $this->cookies = [];
         $this->googleVerifier = new FakeGoogleIdTokenVerifier();
+        $this->clock = new FakeClock(1_703_116_800);
         $this->app = require dirname(__DIR__) . '/config/bootstrap.php';
 
         $container = $this->app->getContainer();
         $this->assertInstanceOf(Container::class, $container);
         $container->set(GoogleIdTokenVerifierInterface::class, $this->googleVerifier);
+        $container->set(ClockInterface::class, $this->clock);
     }
 
     protected function tearDown(): void
@@ -107,6 +113,12 @@ abstract class HttpTestCase extends TestCase
         $this->assertIsArray($payload);
 
         return $payload;
+    }
+
+    protected function freezeAt(string $datetime, string $timezone): void
+    {
+        $at = new \DateTimeImmutable($datetime, new \DateTimeZone($timezone));
+        $this->clock->setTimestamp($at->getTimestamp());
     }
 
     protected function userDbPath(string $email): string

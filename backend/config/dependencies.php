@@ -7,9 +7,11 @@ use Sstf\Api\Domain\SystemClock;
 use Sstf\Api\Http\Controllers\AuthController;
 use Sstf\Api\Http\Controllers\ExerciseController;
 use Sstf\Api\Http\Controllers\HealthController;
+use Sstf\Api\Http\Controllers\LogController;
 use Sstf\Api\Http\Controllers\MeController;
 use Sstf\Api\Http\Controllers\ScheduleController;
 use Sstf\Api\Http\Controllers\SetController;
+use Sstf\Api\Http\Controllers\WorkoutController;
 use Sstf\Api\Http\JsonErrorHandler;
 use Sstf\Api\Http\Middleware\RequireJsonContentType;
 use Sstf\Api\Http\Middleware\SessionAuth;
@@ -23,6 +25,7 @@ use Sstf\Api\Infrastructure\Session\SessionCookie;
 use Sstf\Api\Infrastructure\Session\SessionService;
 use Sstf\Api\Infrastructure\Sqlite\ExerciseRepository;
 use Sstf\Api\Infrastructure\Sqlite\GlobalDb;
+use Sstf\Api\Infrastructure\Sqlite\LogRepository;
 use Sstf\Api\Infrastructure\Sqlite\Migrator;
 use Sstf\Api\Infrastructure\Sqlite\ScheduleRepository;
 use Sstf\Api\Infrastructure\Sqlite\SetRepository;
@@ -31,8 +34,10 @@ use Sstf\Api\Infrastructure\Sqlite\UserDirectory;
 use Sstf\Api\Services\AuthService;
 use Sstf\Api\Services\ExerciseService;
 use Sstf\Api\Services\HealthService;
+use Sstf\Api\Services\LogService;
 use Sstf\Api\Services\ScheduleService;
 use Sstf\Api\Services\SetService;
+use Sstf\Api\Services\WorkoutService;
 
 $settings = require __DIR__ . '/settings.php';
 
@@ -183,6 +188,40 @@ return [
 
     SetController::class => static function ($c): SetController {
         return new SetController($c->get(SetService::class));
+    },
+
+    LogRepository::class => static function ($c): LogRepository {
+        return new LogRepository(
+            $c->get(UserDbFactory::class),
+            $c->get(ClockInterface::class),
+        );
+    },
+
+    WorkoutService::class => static function ($c): WorkoutService {
+        return new WorkoutService(
+            $c->get(ClockInterface::class),
+            $c->get(UserDirectory::class),
+            $c->get(ScheduleRepository::class),
+            $c->get(SetRepository::class),
+            $c->get(LogRepository::class),
+        );
+    },
+
+    LogService::class => static function ($c): LogService {
+        return new LogService(
+            $c->get(UserDirectory::class),
+            $c->get(ScheduleRepository::class),
+            $c->get(SetRepository::class),
+            $c->get(LogRepository::class),
+        );
+    },
+
+    WorkoutController::class => static function ($c): WorkoutController {
+        return new WorkoutController($c->get(WorkoutService::class));
+    },
+
+    LogController::class => static function ($c): LogController {
+        return new LogController($c->get(LogService::class));
     },
 
     SessionAuth::class => static function ($c): SessionAuth {

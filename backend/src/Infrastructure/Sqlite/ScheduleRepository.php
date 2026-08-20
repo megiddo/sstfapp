@@ -34,6 +34,24 @@ final class ScheduleRepository
         return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
+    public function findActive(string $emailHash): ?Schedule
+    {
+        $pdo = $this->users->open($emailHash);
+        $stmt = $pdo->query(
+            'SELECT s.id, s.name, s.is_active,
+                    (SELECT COUNT(*) FROM sets WHERE schedule_id = s.id) AS set_count
+             FROM schedules s
+             WHERE s.is_active = 1 AND s.archived_at IS NULL
+             LIMIT 1',
+        );
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row === false) {
+            return null;
+        }
+
+        return $this->mapRow($row);
+    }
+
     public function getLive(string $emailHash, int $id): Schedule
     {
         $pdo = $this->users->open($emailHash);

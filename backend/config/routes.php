@@ -8,7 +8,9 @@ use Sstf\Api\Http\Controllers\ExerciseController;
 use Sstf\Api\Http\Controllers\HealthController;
 use Sstf\Api\Http\Controllers\MeController;
 use Sstf\Api\Http\Controllers\ScheduleController;
+use Sstf\Api\Http\Controllers\LogController;
 use Sstf\Api\Http\Controllers\SetController;
+use Sstf\Api\Http\Controllers\WorkoutController;
 use Sstf\Api\Http\Middleware\RequireJsonContentType;
 
 return static function (App $app): void {
@@ -42,5 +44,10 @@ return static function (App $app): void {
     $app->delete('/api/sets/{id}', [SetController::class, 'delete'])
         ->add($json);
     $app->put('/api/sets/{id}/exercises', [SetController::class, 'replaceExercises'])
+        ->add($json);
+
+    $app->get('/api/workout/current', [WorkoutController::class, 'current']);
+    $app->get('/api/workout/sets', [WorkoutController::class, 'sets']);
+    $app->post('/api/logs', [LogController::class, 'create'])
         ->add($json);
 };

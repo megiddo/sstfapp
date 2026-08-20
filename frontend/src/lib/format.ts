@@ -10,6 +10,8 @@ export const DAY_NAMES = [
   'Saturday',
 ] as const;
 
+export const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+
 export function isDayOfWeek(value: number): boolean {
   return Number.isInteger(value) && value >= 0 && value <= 6;
 }
@@ -43,4 +45,84 @@ export function formatMinutes(minutes: number): string {
 
 export function todayDayOfWeek(now: Date = new Date()): number {
   return now.getDay();
+}
+
+export function weightStep(unit: 'lb' | 'kg'): number {
+  return unit === 'kg' ? 1.25 : 2.5;
+}
+
+export function applyWeightStep(value: number | null, direction: 1 | -1, unit: 'lb' | 'kg'): number {
+  const base = value === null ? 0 : value;
+  const next = Math.round((base + direction * weightStep(unit)) * 1000) / 1000;
+  if (next < 0) {
+    return 0;
+  }
+  return next;
+}
+
+export function applyRepsStep(value: number | null, direction: 1 | -1): number {
+  const base = value === null ? 0 : value;
+  const next = base + direction;
+  if (next < 0) {
+    return 0;
+  }
+  return next;
+}
+
+export function formatLastLog(weight: number | null, reps: number | null): string {
+  if (weight === null || reps === null) {
+    return 'No history';
+  }
+  return `Last ${weight} × ${reps}`;
+}
+
+export function formatSetSubtitle(dayOfWeek: number, startMinutes: number): string {
+  if (!isDayOfWeek(dayOfWeek)) {
+    throw new Error('weekday must be 0–6');
+  }
+  return `${WEEKDAY_SHORT[dayOfWeek]} · ${formatMinutes(startMinutes)}`;
+}
+
+export function formatHeaderWeekday(date: Date, timeZone?: string): string {
+  return date.toLocaleDateString('en-US', { weekday: 'long', timeZone });
+}
+
+export function formatHeaderDate(date: Date, timeZone?: string): string {
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone });
+}
+
+export function parseSetQuery(value: string | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  if (!/^[1-9][0-9]*$/.test(value)) {
+    return null;
+  }
+  return Number(value);
+}
+
+export function parseNonNegativeNumber(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    return null;
+  }
+  if (!/^(?:\d+|\d+\.\d+)$/.test(trimmed)) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
+}
+
+export function parseNonNegativeInt(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    return null;
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    return null;
+  }
+  return Number(trimmed);
 }

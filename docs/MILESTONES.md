@@ -91,19 +91,21 @@ Companion docs: [DESIGN.md](./DESIGN.md), [UI.md](./UI.md).
 
 **Goal:** Open the app, land on the closest set, log weight × reps, switch sets.
 
-- [ ] `ClosestSet` algorithm (±1 week, min absolute delta, documented tie-break)
-- [ ] `GET /api/workout/current` and `?set_id=`
-- [ ] Last-value prefills: same set + exercise, else last-ever for that exercise
-- [ ] `GET /api/workout/sets` for the switcher
-- [ ] `POST /api/logs` snapshots schedule/set/exercise names
-- [ ] Workout screen: stacked exercise cards, steppers, **full-width Log**, optimistic “Logged”
-- [ ] Set switcher **bottom sheet** grouped by weekday, **Now** marker
-- [ ] Bottom nav with safe-area: Workout, Schedules, History (stub ok), Settings stub
-- [ ] First-run empty workout → CTA into Phase 3 screens
+- [x] `ClosestSet` algorithm (±1 week, min absolute delta, documented tie-break)
+- [x] `GET /api/workout/current` and `?set_id=`
+- [x] Last-value prefills: same set + exercise, else last-ever for that exercise
+- [x] `GET /api/workout/sets` for the switcher
+- [x] `POST /api/logs` snapshots schedule/set/exercise names
+- [x] Workout screen: stacked exercise cards, steppers, **full-width Log**, optimistic “Logged”
+- [x] Set switcher **bottom sheet** grouped by weekday, **Now** marker
+- [x] Bottom nav with safe-area: Workout, Schedules, History (stub ok), Settings stub
+- [x] First-run empty workout → CTA into Phase 3 screens
 
 **Exit:** Same flow on a **phone** (or Chrome 390×844): 6:40 PM Wednesday shows Evening; Log is tappable with a thumb; Bench 190×6 writes a row; Change picks Thursday Morning without deactivating the schedule. Horizontal overflow is a fail.
 
 **MVP freeze:** Phases 0–4. Do not start password auth or polish until this works on a phone. Desktop width is not a ship criterion.
+
+**Progress (M4):** 2026-08-20, branch `sstf-m4`. PHP line coverage **97.99%**; Infection MSI **88%** (covered MSI 89%); Svelte line coverage **97.05%** on `frontend/src/lib`; Stryker **75.97%**.
 
 ---
 
