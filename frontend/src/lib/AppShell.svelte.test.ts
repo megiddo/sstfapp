@@ -26,6 +26,8 @@ describe('AppShell', () => {
     await waitFor(() => {
       expect(screen.getByTestId('api-status')).toHaveTextContent('API is up.');
     });
+    expect(screen.getByText('Create a schedule to start logging.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create a schedule' })).toBeInTheDocument();
   });
 
   it('reports a failed health check', async () => {
@@ -64,5 +66,21 @@ describe('AppShell', () => {
       expect(logout).toHaveBeenCalledTimes(1);
       expect(navigate).toHaveBeenCalledWith('/login');
     });
+  });
+
+  it('sends the empty-state CTA to schedules', async () => {
+    const navigate = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { ok: true } }),
+      }),
+    );
+
+    render(AppShell, { props: { navigate } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Create a schedule' }));
+    expect(navigate).toHaveBeenCalledWith('/schedules');
   });
 });

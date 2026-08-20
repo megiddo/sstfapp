@@ -52,6 +52,21 @@ final class ExerciseRepository
         return $this->mapRows($stmt->fetchAll(PDO::FETCH_ASSOC));
     }
 
+    public function findById(int $id): ?Exercise
+    {
+        $pdo = $this->global->connect();
+        $stmt = $pdo->prepare(
+            'SELECT id, name, muscle_group, equipment, notes FROM exercises WHERE id = :id',
+        );
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($row === false) {
+            return null;
+        }
+
+        return $this->mapRow($row);
+    }
+
     public function create(string $name, ?string $muscleGroup, ?string $equipment, ?string $notes): Exercise
     {
         $pdo = $this->global->connect();

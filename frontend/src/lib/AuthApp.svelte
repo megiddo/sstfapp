@@ -7,6 +7,7 @@
     shouldShowLogin,
     type SessionStatus,
   } from './authGate';
+  import BottomNav from './BottomNav.svelte';
 
   let {
     pathname,
@@ -39,8 +40,19 @@
 
 {#if status === 'unknown' && pathname !== '/login'}
   <p data-testid="session-loading">Checking session…</p>
-{:else if shouldShowLogin(pathname, status) || shouldShowAuthenticatedShell(pathname, status)}
+{:else if shouldShowAuthenticatedShell(pathname, status)}
+  <div class="authed">
+    {@render children()}
+    <BottomNav {pathname} {navigate} />
+  </div>
+{:else if shouldShowLogin(pathname, status)}
   {@render children()}
 {:else}
   <p data-testid="session-redirecting">Redirecting…</p>
 {/if}
+
+<style>
+  .authed {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+</style>

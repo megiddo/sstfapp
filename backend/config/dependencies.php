@@ -8,6 +8,8 @@ use Sstf\Api\Http\Controllers\AuthController;
 use Sstf\Api\Http\Controllers\ExerciseController;
 use Sstf\Api\Http\Controllers\HealthController;
 use Sstf\Api\Http\Controllers\MeController;
+use Sstf\Api\Http\Controllers\ScheduleController;
+use Sstf\Api\Http\Controllers\SetController;
 use Sstf\Api\Http\JsonErrorHandler;
 use Sstf\Api\Http\Middleware\RequireJsonContentType;
 use Sstf\Api\Http\Middleware\SessionAuth;
@@ -22,11 +24,15 @@ use Sstf\Api\Infrastructure\Session\SessionService;
 use Sstf\Api\Infrastructure\Sqlite\ExerciseRepository;
 use Sstf\Api\Infrastructure\Sqlite\GlobalDb;
 use Sstf\Api\Infrastructure\Sqlite\Migrator;
+use Sstf\Api\Infrastructure\Sqlite\ScheduleRepository;
+use Sstf\Api\Infrastructure\Sqlite\SetRepository;
 use Sstf\Api\Infrastructure\Sqlite\UserDbFactory;
 use Sstf\Api\Infrastructure\Sqlite\UserDirectory;
 use Sstf\Api\Services\AuthService;
 use Sstf\Api\Services\ExerciseService;
 use Sstf\Api\Services\HealthService;
+use Sstf\Api\Services\ScheduleService;
+use Sstf\Api\Services\SetService;
 
 $settings = require __DIR__ . '/settings.php';
 
@@ -141,6 +147,42 @@ return [
 
     ExerciseController::class => static function ($c): ExerciseController {
         return new ExerciseController($c->get(ExerciseService::class));
+    },
+
+    ScheduleRepository::class => static function ($c): ScheduleRepository {
+        return new ScheduleRepository(
+            $c->get(UserDbFactory::class),
+            $c->get(ClockInterface::class),
+        );
+    },
+
+    SetRepository::class => static function ($c): SetRepository {
+        return new SetRepository(
+            $c->get(UserDbFactory::class),
+            $c->get(ClockInterface::class),
+        );
+    },
+
+    ScheduleService::class => static function ($c): ScheduleService {
+        return new ScheduleService($c->get(ScheduleRepository::class));
+    },
+
+    SetService::class => static function ($c): SetService {
+        return new SetService(
+            $c->get(SetRepository::class),
+            $c->get(ExerciseRepository::class),
+        );
+    },
+
+    ScheduleController::class => static function ($c): ScheduleController {
+        return new ScheduleController(
+            $c->get(ScheduleService::class),
+            $c->get(SetService::class),
+        );
+    },
+
+    SetController::class => static function ($c): SetController {
+        return new SetController($c->get(SetService::class));
     },
 
     SessionAuth::class => static function ($c): SessionAuth {

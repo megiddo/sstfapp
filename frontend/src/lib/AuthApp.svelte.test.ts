@@ -57,6 +57,8 @@ describe('AuthApp', () => {
     });
     expect(navigate).not.toHaveBeenCalled();
     expect(screen.queryByTestId('session-loading')).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Schedules/ })).toBeInTheDocument();
   });
 
   it('shows login without redirect while anonymous on /login', async () => {

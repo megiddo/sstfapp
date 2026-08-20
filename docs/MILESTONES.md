@@ -71,17 +71,19 @@ Companion docs: [DESIGN.md](./DESIGN.md), [UI.md](./UI.md).
 
 **Goal:** The user can build a weekly plan and mark one schedule active.
 
-- [ ] `GET/POST/PATCH` schedules; first create auto-activates
-- [ ] `POST /api/schedules/:id/activate`
-- [ ] Archive (`DELETE`) without wiping logs
-- [ ] Set CRUD: name, `day_of_week`, `start_minutes`, `sort_order`
-- [ ] `PUT /api/sets/:id/exercises` denormalizes from global catalog
-- [ ] Frontend: schedules list with Active pill
-- [ ] Frontend: week editor — day chips (S–S) + that day’s set list; no 7-column grid
-- [ ] Frontend: set exercise editor as a full-screen push — search, add, up/down reorder, remove, create-global-then-add
-- [ ] Empty states per [UI.md](./UI.md)
+- [x] `GET/POST/PATCH` schedules; first create auto-activates
+- [x] `POST /api/schedules/:id/activate`
+- [x] Archive (`DELETE`) without wiping logs
+- [x] Set CRUD: name, `day_of_week`, `start_minutes`, `sort_order`
+- [x] `PUT /api/sets/:id/exercises` denormalizes from global catalog
+- [x] Frontend: schedules list with Active pill
+- [x] Frontend: week editor — day chips (S–S) + that day’s set list; no 7-column grid
+- [x] Frontend: set exercise editor as a full-screen push — search, add, up/down reorder, remove, create-global-then-add
+- [x] Empty states per [UI.md](./UI.md)
 
 **Exit:** Create “Hypertrophy”, add a Wednesday evening set with two exercises, reload, data persists, only that schedule is active.
+
+**Progress (M3):** 2026-08-20, branch `sstf-m3`. PHP line coverage **97.44%**; Infection MSI **86%** (covered MSI 89%); Svelte line coverage **99.15%** on `frontend/src/lib`; Stryker **80.63%**.
 
 ---
 
