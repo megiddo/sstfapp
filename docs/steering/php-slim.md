@@ -27,9 +27,10 @@ sstfapp/
 │   ├── public/index.php
 │   ├── config/                 # bootstrap, DI, routes, settings
 │   ├── src/
-│   │   ├── Http/               # JsonResponder, JsonErrorHandler, Controllers
+│   │   ├── Http/               # JsonResponder, JsonErrorHandler, Controllers, Middleware
+│   │   ├── Domain/             # EmailKey, timezone, Google claims, exceptions
 │   │   ├── Services/
-│   │   └── Infrastructure/Sqlite/
+│   │   └── Infrastructure/     # Sqlite, GoogleIdTokenVerifierInterface, file sessions
 │   ├── migrations/global/      # numbered *.sql
 │   ├── migrations/user/
 │   ├── tests/Unit
@@ -52,6 +53,9 @@ sstfapp/
 | Routes | `/api/...` (no `/v1` prefix for MVP) |
 | SQLite | WAL, `foreign_keys=ON`, user files `0600`, data dir outside `public/` |
 | User files | Filename allowlist `/^[a-f0-9]{32}$/` on `UserDbFactory` |
+| Session | Server-side file store keyed to `email_hash`; cookie `sstf_session` is `HttpOnly`, `SameSite=Lax`, `Secure` when `APP_ENV=production`. HMAC with `SESSION_SECRET`. Never put raw email in a non-HttpOnly cookie. |
+| Google tokens | Inject `GoogleIdTokenVerifierInterface`. Production verifies RS256 against Google certs (`aud`, `iss`, `exp`). Tests use a fake — never hit the Google network. |
+| CSRF | Same-site cookie + require `Content-Type: application/json` on mutating `/api/auth/*` JSON routes. |
 | Config | `settings.php` reads `$_ENV`; Dotenv loads repo-root or `backend/.env` |
 | Errors | Slim `ErrorMiddleware` + `JsonErrorHandler`; no error logs when `APP_ENV=testing` |
 | Coverage | Gate **`backend/src` only**; config/public/migrations SQL are out of the percentage |
@@ -75,5 +79,5 @@ See [QUALITY.md](../QUALITY.md). Do not lower these without a documented excepti
 ## Expand later
 
 - Coding standards (phpcs / phpstan levels)
-- Session + CSRF (Phase 1)
+- Session + CSRF (Phase 1): HttpOnly session cookie + JSON Content-Type on mutating auth routes
 - Rate limits on `/api/auth/*` (Phase 6+)

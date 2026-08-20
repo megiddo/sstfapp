@@ -13,6 +13,8 @@ services:
       APP_ENV: development
       APP_DEBUG: "true"
       DATA_PATH: /data
+      SESSION_SECRET: ${SESSION_SECRET:-dev-insecure-session-secret-change-me}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     volumes:
       - ../backend:/app
       - api_vendor:/app/vendor
@@ -30,6 +32,7 @@ services:
       - "${WEB_PORT:-5173}:5173"
     environment:
       API_PROXY_TARGET: http://api:8080
+      PUBLIC_GOOGLE_CLIENT_ID: ${PUBLIC_GOOGLE_CLIENT_ID:-${GOOGLE_CLIENT_ID:-}}
     volumes:
       - ../frontend:/app
       - web_node_modules:/app/node_modules

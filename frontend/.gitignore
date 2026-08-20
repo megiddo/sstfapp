@@ -3,4 +3,5 @@ build
 .svelte-kit
 coverage
 .stryker-tmp
+.env
 vite.config.ts.timestamp-*

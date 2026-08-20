@@ -31,21 +31,23 @@ Companion docs: [DESIGN.md](./DESIGN.md), [UI.md](./UI.md).
 
 **Goal:** A verified Google email creates or opens `data/users/{md5}.sqlite` and a session.
 
-- [ ] Env: `GOOGLE_CLIENT_ID`, session secret, `APP_ENV`
-- [ ] `EmailKey`: trim, lowercase, `md5` hex filename
-- [ ] `POST /api/auth/google` verifies ID token (`aud`, `iss`, `exp`, `email_verified`)
-- [ ] Provision user DB + run user migrations + `account` + `identities(google)`
-- [ ] Existing file: link Google `sub` if missing (same email)
-- [ ] Session cookie `HttpOnly`, `SameSite=Lax`, `Secure` in production
-- [ ] `GET /api/me`, `POST /api/auth/logout`
-- [ ] Auth middleware on `/api/*` except health + auth
-- [ ] Login page: official GIS button (not One Tap), error states
-- [ ] Authenticated shell redirects unknown session to `/login`
-- [ ] Capture browser timezone into `account.timezone` on first login
-- [ ] Upsert `user_index.email_hash` in global DB
-- [ ] Tests or a scripted check: unverified email rejected; two logins same email → one file
+- [x] Env: `GOOGLE_CLIENT_ID`, session secret, `APP_ENV`
+- [x] `EmailKey`: trim, lowercase, `md5` hex filename
+- [x] `POST /api/auth/google` verifies ID token (`aud`, `iss`, `exp`, `email_verified`)
+- [x] Provision user DB + run user migrations + `account` + `identities(google)`
+- [x] Existing file: link Google `sub` if missing (same email)
+- [x] Session cookie `HttpOnly`, `SameSite=Lax`, `Secure` in production
+- [x] `GET /api/me`, `POST /api/auth/logout`
+- [x] Auth middleware on `/api/*` except health + auth
+- [x] Login page: official GIS button (not One Tap), error states
+- [x] Authenticated shell redirects unknown session to `/login`
+- [x] Capture browser timezone into `account.timezone` on first login
+- [x] Upsert `user_index.email_hash` in global DB
+- [x] Tests or a scripted check: unverified email rejected; two logins same email → one file
 
 **Exit:** Sign in with Google twice → one user file, `/api/me` returns the email, logout clears access.
+
+**Progress (M1):** 2026-08-20, branch `sstf-m1`. PHP line coverage **96.67%**; Infection MSI **84%** (covered MSI 87%); Svelte line coverage **100%** on `frontend/src/lib`; Stryker **86.61%**.
 
 ---
 

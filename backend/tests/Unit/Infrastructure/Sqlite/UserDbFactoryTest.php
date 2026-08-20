@@ -59,6 +59,19 @@ final class UserDbFactoryTest extends TestCase
         $this->assertSame('wal', strtolower((string) $mode));
         $this->assertSame(1, (int) $pdo->query('PRAGMA foreign_keys')->fetchColumn());
         $this->assertSame(SqliteConnection::FILE_MODE, fileperms($expected) & 0777);
+        $this->assertTrue($factory->exists(self::VALID));
+    }
+
+    public function testExistsIsFalseForMissingAndInvalidNames(): void
+    {
+        $factory = $this->factory();
+        $this->assertFalse($factory->exists(self::VALID));
+        $this->assertFalse($factory->exists('NOPE'));
+        $this->assertFalse($factory->exists(''));
+        $this->assertFalse($factory->exists(strtoupper(self::VALID)));
+        $factory->open(self::VALID);
+        $this->assertTrue($factory->exists(self::VALID));
+        $this->assertFalse($factory->exists('gggggggggggggggggggggggggggggggg'));
     }
 
     public function testDoesNotCreateFileForRejectedNames(): void

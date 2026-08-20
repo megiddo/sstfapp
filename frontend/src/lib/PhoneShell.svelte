@@ -1,7 +1,22 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { maxWidthCss, minInputFontCss, THEME } from './theme';
 
-  let { title, subtitle, status }: { title: string; subtitle: string; status: string } = $props();
+  let {
+    title,
+    subtitle,
+    status = '',
+    actionLabel = '',
+    onAction,
+    children,
+  }: {
+    title: string;
+    subtitle: string;
+    status?: string;
+    actionLabel?: string;
+    onAction?: () => void;
+    children?: Snippet;
+  } = $props();
 </script>
 
 <div
@@ -9,10 +24,20 @@
   style="max-width: {maxWidthCss()}; --input-font: {minInputFontCss()}; background: {THEME.background};"
 >
   <header>
-    <h1>{title}</h1>
+    <div class="header-row">
+      <h1>{title}</h1>
+      {#if actionLabel !== ''}
+        <button type="button" class="text-action" data-testid="shell-action" onclick={() => onAction?.()}>
+          {actionLabel}
+        </button>
+      {/if}
+    </div>
     <p class="subtitle">{subtitle}</p>
   </header>
-  <p class="status" data-testid="api-status">{status}</p>
+  {#if status !== ''}
+    <p class="status" data-testid="api-status">{status}</p>
+  {/if}
+  {@render children?.()}
 </div>
 
 <style>
@@ -29,6 +54,22 @@
     margin: 0;
     font-size: 2rem;
     letter-spacing: 0.04em;
+  }
+
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .text-action {
+    background: transparent;
+    color: #e8a04a;
+    border: 0;
+    min-height: 48px;
+    padding: 0 0.5rem;
+    cursor: pointer;
   }
 
   .subtitle,

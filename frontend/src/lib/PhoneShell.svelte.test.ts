@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/svelte';
+import { describe, expect, it, vi } from 'vitest';
 import PhoneShell from './PhoneShell.svelte';
 
 describe('PhoneShell', () => {
@@ -31,5 +31,22 @@ describe('PhoneShell', () => {
     expect(shell?.getAttribute('style')).toContain('430px');
     expect(shell?.getAttribute('style')).toContain('16px');
     expect(shell?.getAttribute('style')).toMatch(/#121212|rgb\(18,\s*18,\s*18\)/);
+  });
+
+  it('renders an optional sign-out action', async () => {
+    const onAction = vi.fn();
+    render(PhoneShell, {
+      props: {
+        title: 'SSTF',
+        subtitle: 'Single set to failure.',
+        actionLabel: 'Sign out',
+        onAction,
+      },
+    });
+
+    expect(screen.queryByTestId('api-status')).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByTestId('shell-action'));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
   });
 });

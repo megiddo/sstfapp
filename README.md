@@ -39,9 +39,12 @@ Copy `.env.example` to `.env`. Compose also sets container values.
 
 | Variable | Purpose |
 |----------|---------|
-| `APP_ENV` | `development` / `testing` / `production`. Testing disables Slim error logs. |
+| `APP_ENV` | `development` / `testing` / `production`. Testing disables Slim error logs. Production sets the session cookie `Secure` flag. |
 | `APP_DEBUG` | When true, `JsonErrorHandler` may include exception messages. |
 | `DATA_PATH` | Directory for `global.sqlite` and `users/*.sqlite`. Compose uses `/data`. |
+| `GOOGLE_CLIENT_ID` | Google Identity Services / OAuth client ID. Used to verify ID token `aud`. |
+| `PUBLIC_GOOGLE_CLIENT_ID` | Same value for the SvelteKit login button (Vite public env). |
+| `SESSION_SECRET` | HMAC key for the HttpOnly `sstf_session` cookie. Use a long random string in production. |
 
 Do not commit `.env` or any `*.sqlite` files.
 

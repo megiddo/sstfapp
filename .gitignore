@@ -17,6 +17,7 @@ data/*.sqlite
 data/*.sqlite-*
 data/users/*.sqlite
 data/users/*.sqlite-*
+data/sessions/
 
 # Backend
 backend/vendor/

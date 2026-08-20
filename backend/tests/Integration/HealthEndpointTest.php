@@ -51,18 +51,17 @@ final class HealthEndpointTest extends HttpTestCase
         $this->assertStringContainsString('true', $raw);
     }
 
-    public function testUnknownRouteReturnsJsonErrorEnvelope(): void
+    public function testUnknownRouteWithoutSessionRequiresAuth(): void
     {
         $response = $this->request('GET', '/api/does-not-exist');
 
-        $this->assertSame(404, $response->getStatusCode());
+        $this->assertSame(401, $response->getStatusCode());
         $this->assertSame('application/json', $response->getHeaderLine('Content-Type'));
 
         $payload = $this->json($response);
         $this->assertArrayHasKey('error', $payload);
         $this->assertArrayNotHasKey('data', $payload);
-        $this->assertIsArray($payload['error']);
-        $this->assertSame('http_error', $payload['error']['code']);
+        $this->assertSame('unauthenticated', $payload['error']['code']);
         $this->assertIsString($payload['error']['message']);
         $this->assertNotSame('', $payload['error']['message']);
     }

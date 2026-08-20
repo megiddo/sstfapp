@@ -38,6 +38,15 @@ final class UserDbFactory
         return $this->usersDirectory . '/' . $name . '.sqlite';
     }
 
+    public function exists(string $name): bool
+    {
+        if (!$this->isValidName($name)) {
+            return false;
+        }
+
+        return is_file($this->pathFor($name));
+    }
+
     public function open(string $name): PDO
     {
         $path = $this->pathFor($name);

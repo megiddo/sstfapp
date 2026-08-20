@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import AppShell from './AppShell.svelte';
 
@@ -42,6 +42,27 @@ describe('AppShell', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('api-status')).toHaveTextContent('API is down. HTTP 500');
+    });
+  });
+
+  it('signs out and navigates to login', async () => {
+    const navigate = vi.fn();
+    const logout = vi.fn(async () => undefined);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { ok: true } }),
+      }),
+    );
+
+    render(AppShell, { props: { navigate, logout } });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+    await waitFor(() => {
+      expect(logout).toHaveBeenCalledTimes(1);
+      expect(navigate).toHaveBeenCalledWith('/login');
     });
   });
 });
