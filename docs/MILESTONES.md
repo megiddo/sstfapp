@@ -10,18 +10,20 @@ Companion docs: [DESIGN.md](./DESIGN.md), [UI.md](./UI.md).
 
 **Goal:** Empty Slim API and empty Svelte SPA run from one origin, with SQLite helpers and migrations wired, no product features yet.
 
-- [ ] Repository layout: `backend/`, `frontend/`, `data/` (gitignored), `docs/`
-- [ ] PHP 8.2+, Composer, Slim 4 skeleton, `/api/health` → `{ "ok": true }`
-- [ ] PDO SQLite wrapper, WAL, `foreign_keys=ON`, path allowlist for user files
-- [ ] Migrator for `migrations/global/` and `migrations/user/`
-- [ ] Create empty `data/global.sqlite` on first boot
-- [ ] SvelteKit + `adapter-static`, `ssr = false`, `fallback: 'index.html'`
-- [ ] Phone shell: viewport meta (`viewport-fit=cover`), `theme-color`, 16px input baseline, content column max ~430px
-- [ ] Dev story: Vite proxy `/api` → Slim, or a small nginx/Caddy compose file
-- [ ] Production story: build SPA into a directory Slim/nginx can serve beside `/api`
-- [ ] README: run instructions, PHP/Node versions, env vars listed
+- [x] Repository layout: `backend/`, `frontend/`, `data/` (gitignored), `docs/`
+- [x] PHP 8.2+, Composer, Slim 4 skeleton, `/api/health` → `{ "data": { "ok": true } }`
+- [x] PDO SQLite wrapper, WAL, `foreign_keys=ON`, path allowlist for user files
+- [x] Migrator for `migrations/global/` and `migrations/user/`
+- [x] Create empty `data/global.sqlite` on first boot
+- [x] SvelteKit + `adapter-static`, `ssr = false`, `fallback: 'index.html'`
+- [x] Phone shell: viewport meta (`viewport-fit=cover`), `theme-color`, 16px input baseline, content column max ~430px
+- [x] Dev story: Vite proxy `/api` → Slim, or a small nginx/Caddy compose file
+- [x] Production story: build SPA into a directory Slim/nginx can serve beside `/api`
+- [x] README: run instructions, PHP/Node versions, env vars listed
 
 **Exit:** SPA loads in a 390px-wide viewport without horizontal scroll; `GET /api/health` succeeds; no user data yet.
+
+**Progress (M0):** 2026-08-20, branch `sstf-m0`. PHP line coverage **97.71%**; Infection MSI **85%** (covered MSI 90%); Svelte line coverage **100%** on `frontend/src/lib`; Stryker **98.08%**.
 
 ---
 

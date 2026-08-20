@@ -1,0 +1,32 @@
+:root {
+  color-scheme: dark;
+  --sstf-bg: #121212;
+  --sstf-surface: #1c1c1c;
+  --sstf-text: #f5f5f5;
+  --sstf-muted: #a3a3a3;
+  --sstf-accent: #e8a04a;
+  --sstf-max-width: 430px;
+  --sstf-input-font: 16px;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--sstf-bg);
+  color: var(--sstf-text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+input,
+select,
+textarea,
+button {
+  font-size: var(--sstf-input-font);
+}
+
+input,
+select,
+textarea {
+  font-size: 16px;
+}

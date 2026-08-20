@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "mutate": [
+    "src/lib/**/*.ts",
+    "src/lib/**/*.svelte",
+    "!src/lib/**/*.test.ts",
+    "!src/lib/**/*.spec.ts"
+  ],
+  "vitest": {
+    "configFile": "vite.config.ts"
+  },
+  "tempDirName": "/tmp/sstf-stryker",
+  "cleanTempDir": true,
+  "thresholds": {
+    "high": 80,
+    "low": 70,
+    "break": 70
+  },
+  "reporters": ["clear-text", "progress", "html"],
+  "htmlReporter": {
+    "fileName": "/tmp/sstf-stryker/report.html"
+  }
+}
