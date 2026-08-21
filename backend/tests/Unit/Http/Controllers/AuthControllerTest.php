@@ -8,6 +8,8 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Response;
+use Sstf\Api\Domain\AccountExistsException;
+use Sstf\Api\Domain\RepoKey;
 use Sstf\Api\Domain\SystemClock;
 use Sstf\Api\Http\Controllers\AuthController;
 use Sstf\Api\Http\Controllers\MeController;
@@ -25,6 +27,7 @@ use Sstf\Api\Tests\Fakes\FakeGoogleIdTokenVerifier;
 #[CoversClass(AuthController::class)]
 #[CoversClass(MeController::class)]
 #[CoversClass(JsonResponder::class)]
+#[CoversClass(AccountExistsException::class)]
 final class AuthControllerTest extends TestCase
 {
     private string $tmp;
@@ -113,7 +116,7 @@ final class AuthControllerTest extends TestCase
         $cookie = $this->cookieValue($login->getHeaderLine('Set-Cookie'));
         $this->assertNotSame('', $cookie);
 
-        $hash = md5('me@example.com');
+        $hash = RepoKey::google('me@example.com')->hash();
         $me = $meController->me(
             (new ServerRequestFactory())->createServerRequest('GET', '/api/me')
                 ->withAttribute('email_hash', $hash),
@@ -257,7 +260,7 @@ final class AuthControllerTest extends TestCase
         $auth->registerWithPassword('pw@example.com', 'right-pass', 'UTC');
         $ok = $controller->password(
             $factory->createServerRequest('POST', '/api/auth/password')->withParsedBody([
-                'email' => 'pw@example.com',
+                'username' => 'pw@example.com',
                 'password' => 'right-pass',
             ]),
             new Response(),
@@ -269,6 +272,81 @@ final class AuthControllerTest extends TestCase
         $this->assertSame('pw@example.com', $json['data']['email']);
     }
 
+    public function testRegisterMapsErrorsAndSetsCookie(): void
+    {
+        $controller = new AuthController($this->auth(new FakeGoogleIdTokenVerifier()), $this->sessions());
+        $factory = new ServerRequestFactory();
+
+        $notArray = $controller->register(
+            $factory->createServerRequest('POST', '/api/auth/register')->withParsedBody(null),
+            new Response(),
+        );
+        $this->assertSame(400, $notArray->getStatusCode());
+        $this->assertStringContainsString('invalid_request', (string) $notArray->getBody());
+        $this->assertStringContainsString('Registration failed', (string) $notArray->getBody());
+
+        $missing = $controller->register(
+            $factory->createServerRequest('POST', '/api/auth/register')->withParsedBody(['email' => 1, 'password' => 'x']),
+            new Response(),
+        );
+        $this->assertSame(400, $missing->getStatusCode());
+        $this->assertStringContainsString('Registration failed', (string) $missing->getBody());
+
+        $emptyPassword = $controller->register(
+            $factory->createServerRequest('POST', '/api/auth/register')->withParsedBody([
+                'email' => 'a@b.com',
+                'password' => '',
+            ]),
+            new Response(),
+        );
+        $this->assertSame(400, $emptyPassword->getStatusCode());
+        $this->assertStringContainsString('invalid_password', (string) $emptyPassword->getBody());
+        $this->assertStringContainsString('Enter a password', (string) $emptyPassword->getBody());
+
+        $invalidEmail = $controller->register(
+            $factory->createServerRequest('POST', '/api/auth/register')->withParsedBody([
+                'email' => 'nope!',
+                'password' => 'secret',
+            ]),
+            new Response(),
+        );
+        $this->assertSame(400, $invalidEmail->getStatusCode());
+        $this->assertStringContainsString('invalid_request', (string) $invalidEmail->getBody());
+        $this->assertFileDoesNotExist($this->tmp . '/users/' . md5('password|nope!') . '.sqlite');
+
+        $ok = $controller->register(
+            $factory->createServerRequest('POST', '/api/auth/register')->withParsedBody([
+                'email' => 'new@example.com',
+                'password' => 'starter-pass',
+                'timezone' => 12,
+            ]),
+            new Response(),
+        );
+        $this->assertSame(200, $ok->getStatusCode());
+        $this->assertNotSame('', $ok->getHeaderLine('Set-Cookie'));
+        $json = json_decode((string) $ok->getBody(), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertSame('new@example.com', $json['data']['email']);
+        $this->assertArrayNotHasKey('password_hash', $json['data']);
+        $this->assertStringNotContainsString('starter-pass', (string) $ok->getBody());
+        $providers = [];
+        foreach ($json['data']['identities'] as $identity) {
+            $providers[] = $identity['provider'];
+        }
+        $this->assertSame(['password'], $providers);
+
+        $dup = $controller->register(
+            $factory->createServerRequest('POST', '/api/auth/register')->withParsedBody([
+                'email' => 'new@example.com',
+                'password' => 'other-pass',
+            ]),
+            new Response(),
+        );
+        $this->assertSame(409, $dup->getStatusCode());
+        $this->assertStringContainsString('account_exists', (string) $dup->getBody());
+        $this->assertStringContainsString('Account already exists', (string) $dup->getBody());
+        $this->assertStringNotContainsString('other-pass', (string) $dup->getBody());
+    }
+
     public function testPatchPasswordTypeErrors(): void
     {
         $verifier = new FakeGoogleIdTokenVerifier();
@@ -276,7 +354,7 @@ final class AuthControllerTest extends TestCase
         $auth = $this->auth($verifier);
         $auth->signInWithGoogle('ok', 'UTC');
         $me = new MeController($auth);
-        $hash = md5('me@example.com');
+        $hash = RepoKey::google('me@example.com')->hash();
         $factory = new ServerRequestFactory();
 
         $badPassword = $me->patch(

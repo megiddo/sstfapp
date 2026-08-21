@@ -14,7 +14,9 @@ final readonly class WorkoutCurrent
      *   muscle_group: ?string,
      *   equipment: ?string,
      *   last_weight: ?float,
-     *   last_reps: ?int
+     *   last_reps: ?int,
+     *   best_weight: ?float,
+     *   best_reps: ?int
      * }> $exercises
      */
     public function __construct(
@@ -49,7 +51,9 @@ final readonly class WorkoutCurrent
      *     muscle_group: ?string,
      *     equipment: ?string,
      *     last_weight: ?float,
-     *     last_reps: ?int
+     *     last_reps: ?int,
+     *     best_weight: ?float,
+     *     best_reps: ?int
      *   }>
      * }
      */

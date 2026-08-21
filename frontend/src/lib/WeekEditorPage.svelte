@@ -1,10 +1,11 @@
 <script lang="ts">
+  import ConfirmSheet from './ConfirmSheet.svelte';
   import DayChips from './DayChips.svelte';
   import EmptyState from './EmptyState.svelte';
   import PhoneShell from './PhoneShell.svelte';
   import TimePickerSheet from './TimePickerSheet.svelte';
   import { DAY_NAMES, formatMinutes, snapMinutesToQuarter, todayDayOfWeek } from './format';
-  import { createSet, listScheduleSets, patchSet, type TrainingSet } from './schedules';
+  import { createSet, deleteSet, listScheduleSets, patchSet, type TrainingSet } from './schedules';
 
   let {
     scheduleId,
@@ -13,6 +14,7 @@
     loadSets = listScheduleSets,
     makeSet = createSet,
     saveSet = patchSet,
+    removeSet = deleteSet,
   }: {
     scheduleId: number;
     navigate?: (path: string) => Promise<void> | void;
@@ -20,6 +22,7 @@
     loadSets?: typeof listScheduleSets;
     makeSet?: typeof createSet;
     saveSet?: typeof patchSet;
+    removeSet?: typeof deleteSet;
   } = $props();
 
   let selectedDay = $state(today());
@@ -28,6 +31,7 @@
   let newName = $state('Evening');
   let newMinutes = $state(1080);
   let pickerFor = $state<'new' | number | null>(null);
+  let removeId = $state<number | null>(null);
 
   const daySets = $derived(sets.filter((set) => set.day_of_week === selectedDay));
   const pickerMinutes = $derived(
@@ -99,6 +103,16 @@
     }
     void handleTime(pickerFor, minutes);
   }
+
+  async function handleRemove(id: number) {
+    const result = await removeSet(id);
+    removeId = null;
+    if (!result.ok) {
+      error = result.message;
+      return;
+    }
+    await refresh();
+  }
 </script>
 
 <PhoneShell title="Week" subtitle={DAY_NAMES[selectedDay] ?? ''}>
@@ -140,6 +154,9 @@
         >
           {set.exercises.length} {set.exercises.length === 1 ? 'exercise' : 'exercises'} · {formatMinutes(set.start_minutes)}
         </button>
+        <button type="button" class="remove" aria-label={`Remove ${set.name}`} onclick={() => (removeId = set.id)}>
+          Remove
+        </button>
       </li>
     {/each}
   </ul>
@@ -168,6 +185,20 @@
   onSelect={handlePick}
   onClose={() => (pickerFor = null)}
 />
+
+{#if removeId !== null}
+  <ConfirmSheet
+    title="Remove this set?"
+    message="Logs stay. This set is removed from the week."
+    confirmLabel="Remove set"
+    onConfirm={() => {
+      if (removeId !== null) {
+        void handleRemove(removeId);
+      }
+    }}
+    onCancel={() => (removeId = null)}
+  />
+{/if}
 
 <style>
   .back {
@@ -212,7 +243,8 @@
   }
 
   .time,
-  .open {
+  .open,
+  .remove {
     min-height: 48px;
     border: 0;
     border-radius: 10px;
@@ -221,6 +253,11 @@
     text-align: left;
     cursor: pointer;
     padding: 0 0.85rem;
+  }
+
+  .remove {
+    background: transparent;
+    border: 1px solid #3a3a3a;
   }
 
   .add {

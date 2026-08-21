@@ -8,7 +8,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Response;
-use Sstf\Api\Domain\EmailKey;
+use Sstf\Api\Domain\RepoKey;
 use Sstf\Api\Domain\ExerciseLog;
 use Sstf\Api\Domain\HistoryDay;
 use Sstf\Api\Domain\HistoryFilters;
@@ -69,7 +69,7 @@ final class HistoryExportControllerTest extends TestCase
         parent::setUp();
         $this->tmp = sys_get_temp_dir() . '/sstf-hist-ctl-' . getmypid() . '-' . bin2hex(random_bytes(4));
         mkdir($this->tmp . '/users', 0700, true);
-        $this->hash = EmailKey::fromEmail('hist@example.com')->hash();
+        $this->hash = RepoKey::google('hist@example.com')->hash();
         $root = dirname(__DIR__, 4);
         $this->clock = new FakeClock(
             (new \DateTimeImmutable('2026-08-19 18:40:00', new \DateTimeZone('America/Chicago')))->getTimestamp(),
@@ -78,7 +78,8 @@ final class HistoryExportControllerTest extends TestCase
         $global = new GlobalDb($this->tmp . '/global.sqlite', new Migrator(), $root . '/migrations/global');
         $directory = new UserDirectory($this->users, $global, $this->clock);
         $directory->provisionGoogleUser(
-            EmailKey::fromEmail('hist@example.com'),
+            $this->hash,
+            'hist@example.com',
             'hist@example.com',
             'sub-hist',
             'America/Chicago',

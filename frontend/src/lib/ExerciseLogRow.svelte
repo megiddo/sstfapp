@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { formatLastLog } from './format';
+  import { formatBestLog, formatLastLog } from './format';
   import RepsField from './RepsField.svelte';
   import WeightField from './WeightField.svelte';
   import type { WeightUnit, WorkoutExercise } from './workout';
@@ -27,6 +27,7 @@
   } = $props();
 
   const canLog = $derived(exercise.global_exercise_id !== null && !pending);
+  const best = $derived(formatBestLog(exercise.best_weight, exercise.best_reps));
 </script>
 
 <article class="card" data-testid={`exercise-${exercise.id}`}>
@@ -38,6 +39,9 @@
       {/if}
     </div>
     <p class="last">{formatLastLog(exercise.last_weight, exercise.last_reps)}</p>
+    {#if best !== null}
+      <p class="best">{best}</p>
+    {/if}
   </header>
   <div class="fields">
     <WeightField value={weight} {unit} onChange={onWeight} />
@@ -88,7 +92,8 @@
     flex: 0 0 auto;
   }
 
-  .last {
+  .last,
+  .best {
     margin: 0;
     color: #a3a3a3;
     font-variant-numeric: tabular-nums;

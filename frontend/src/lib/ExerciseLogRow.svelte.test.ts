@@ -11,6 +11,8 @@ const bench: WorkoutExercise = {
   equipment: 'Barbell',
   last_weight: 185,
   last_reps: 8,
+  best_weight: 225,
+  best_reps: 5,
 };
 
 describe('ExerciseLogRow', () => {
@@ -30,6 +32,7 @@ describe('ExerciseLogRow', () => {
     expect(screen.getByRole('heading', { name: 'Bench Press' })).toBeInTheDocument();
     expect(screen.getByText('Chest')).toBeInTheDocument();
     expect(screen.getByText('Last 185 × 8')).toBeInTheDocument();
+    expect(screen.getByText('Best 225 × 5')).toBeInTheDocument();
     const log = screen.getByRole('button', { name: 'Log' });
     expect(log).not.toBeDisabled();
     await fireEvent.click(log);
@@ -41,7 +44,7 @@ describe('ExerciseLogRow', () => {
     const onLog = vi.fn();
     render(ExerciseLogRow, {
       props: {
-        exercise: { ...bench, last_weight: null, last_reps: null, muscle_group: null },
+        exercise: { ...bench, last_weight: null, last_reps: null, best_weight: null, best_reps: null, muscle_group: null },
         unit: 'kg',
         weight: null,
         reps: null,
@@ -53,6 +56,7 @@ describe('ExerciseLogRow', () => {
       },
     });
     expect(screen.getByText('No history')).toBeInTheDocument();
+    expect(screen.queryByText(/Best/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Log' })).toHaveTextContent('Logged');
     expect(screen.getByRole('button', { name: 'Log' })).toBeDisabled();
     expect(onLog).not.toHaveBeenCalled();

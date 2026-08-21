@@ -8,8 +8,8 @@ use PDO;
 use RuntimeException;
 use Sstf\Api\Domain\AccountSnapshot;
 use Sstf\Api\Domain\ClockInterface;
-use Sstf\Api\Domain\EmailKey;
 use Sstf\Api\Domain\IanaTimezone;
+use Sstf\Api\Domain\LoginTakenException;
 
 final class UserDirectory
 {
@@ -21,12 +21,13 @@ final class UserDirectory
     }
 
     public function provisionGoogleUser(
-        EmailKey $key,
+        string $repoHash,
         string $displayEmail,
+        string $normalizedEmail,
         string $googleSubject,
         ?string $timezone,
     ): AccountSnapshot {
-        $pdo = $this->users->open($key->hash());
+        $pdo = $this->users->open($repoHash);
         $existing = $this->fetchAccount($pdo);
         $now = $this->clock->now()->setTimezone(new \DateTimeZone('UTC'))->format('c');
 
@@ -41,7 +42,7 @@ final class UserDirectory
             );
             $stmt->execute([
                 'email' => $displayEmail,
-                'email_normalized' => $key->normalized(),
+                'email_normalized' => $normalizedEmail,
                 'timezone' => $resolvedTz,
                 'weight_unit' => 'lb',
                 'created_at' => $now,
@@ -50,7 +51,8 @@ final class UserDirectory
         }
 
         $this->ensureIdentity($pdo, 'google', $googleSubject, $now);
-        $this->upsertIndex($key->hash(), $now);
+        $this->bindLogin('google', $normalizedEmail, $repoHash, $now);
+        $this->upsertIndex($repoHash, $now);
 
         $loaded = $this->fetchAccount($pdo);
         if ($loaded === null) {
@@ -61,12 +63,13 @@ final class UserDirectory
     }
 
     public function provisionPasswordUser(
-        EmailKey $key,
-        string $displayEmail,
+        string $repoHash,
+        string $displayName,
+        string $normalizedUsername,
         string $passwordHash,
         ?string $timezone,
     ): AccountSnapshot {
-        $pdo = $this->users->open($key->hash());
+        $pdo = $this->users->open($repoHash);
         $existing = $this->fetchAccount($pdo);
         $now = $this->clock->now()->setTimezone(new \DateTimeZone('UTC'))->format('c');
 
@@ -80,8 +83,8 @@ final class UserDirectory
                 )',
             );
             $stmt->execute([
-                'email' => $displayEmail,
-                'email_normalized' => $key->normalized(),
+                'email' => $displayName,
+                'email_normalized' => $normalizedUsername,
                 'password_hash' => $passwordHash,
                 'timezone' => $resolvedTz,
                 'weight_unit' => 'lb',
@@ -98,8 +101,9 @@ final class UserDirectory
             ]);
         }
 
-        $this->ensureIdentity($pdo, 'password', $key->normalized(), $now);
-        $this->upsertIndex($key->hash(), $now);
+        $this->ensureIdentity($pdo, 'password', $normalizedUsername, $now);
+        $this->bindLogin('password', $normalizedUsername, $repoHash, $now);
+        $this->upsertIndex($repoHash, $now);
 
         $loaded = $this->fetchAccount($pdo);
         if ($loaded === null) {
@@ -107,6 +111,23 @@ final class UserDirectory
         }
 
         return $loaded;
+    }
+
+    public function repoHashForLogin(string $provider, string $loginKey): ?string
+    {
+        $stmt = $this->global->connect()->prepare(
+            'SELECT repo_hash FROM login_map WHERE provider = :provider AND login_key = :login_key LIMIT 1',
+        );
+        $stmt->execute([
+            'provider' => $provider,
+            'login_key' => $loginKey,
+        ]);
+        $hash = $stmt->fetchColumn();
+        if (!is_string($hash) || $hash === '') {
+            return null;
+        }
+
+        return $hash;
     }
 
     public function userFileExists(string $emailHash): bool
@@ -153,6 +174,7 @@ final class UserDirectory
         $email = $pdo->query('SELECT email_normalized FROM account WHERE id = 1')->fetchColumn();
         $subject = is_string($email) && $email !== '' ? $email : $emailHash;
         $this->ensureIdentity($pdo, 'password', $subject, $now);
+        $this->bindLogin('password', $subject, $emailHash, $now);
 
         return $this->fetchAccount($pdo);
     }
@@ -251,6 +273,28 @@ final class UserDirectory
             'provider' => $provider,
             'subject' => $subject,
             'created_at' => $now,
+        ]);
+    }
+
+    private function bindLogin(string $provider, string $loginKey, string $repoHash, string $createdAt): void
+    {
+        $existing = $this->repoHashForLogin($provider, $loginKey);
+        if ($existing === $repoHash) {
+            return;
+        }
+        if ($existing !== null) {
+            throw new LoginTakenException();
+        }
+
+        $stmt = $this->global->connect()->prepare(
+            'INSERT INTO login_map (provider, login_key, repo_hash, created_at)
+             VALUES (:provider, :login_key, :repo_hash, :created_at)',
+        );
+        $stmt->execute([
+            'provider' => $provider,
+            'login_key' => $loginKey,
+            'repo_hash' => $repoHash,
+            'created_at' => $createdAt,
         ]);
     }
 

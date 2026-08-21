@@ -27,6 +27,8 @@ export type WorkoutExercise = {
   equipment: string | null;
   last_weight: number | null;
   last_reps: number | null;
+  best_weight: number | null;
+  best_reps: number | null;
 };
 
 export type WorkoutCurrent = {
@@ -151,7 +153,9 @@ function parseExercise(value: unknown): WorkoutExercise | null {
   }
   const lastWeight = parseNonNegativeFinite(value.last_weight);
   const lastReps = parseNonNegativeInt(value.last_reps);
-  if (lastWeight === undefined || lastReps === undefined) {
+  const bestWeight = parseNonNegativeFinite(value.best_weight);
+  const bestReps = parseNonNegativeInt(value.best_reps);
+  if (lastWeight === undefined || lastReps === undefined || bestWeight === undefined || bestReps === undefined) {
     return null;
   }
   return {
@@ -162,6 +166,8 @@ function parseExercise(value: unknown): WorkoutExercise | null {
     equipment: value.equipment,
     last_weight: lastWeight,
     last_reps: lastReps,
+    best_weight: bestWeight,
+    best_reps: bestReps,
   };
 }
 

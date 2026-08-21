@@ -6,6 +6,7 @@ namespace Sstf\Api\Services;
 
 use InvalidArgumentException;
 use RuntimeException;
+use Sstf\Api\Domain\AccountExistsException;
 use Sstf\Api\Domain\AccountSnapshot;
 use Sstf\Api\Domain\EmailKey;
 use Sstf\Api\Domain\EmailUnverifiedException;
@@ -16,7 +17,10 @@ use Sstf\Api\Domain\InvalidGoogleIdTokenException;
 use Sstf\Api\Domain\InvalidPasswordException;
 use Sstf\Api\Domain\InvalidTimezoneException;
 use Sstf\Api\Domain\InvalidWeightUnitException;
+use Sstf\Api\Domain\LoginTakenException;
+use Sstf\Api\Domain\RepoKey;
 use Sstf\Api\Domain\UnauthenticatedException;
+use Sstf\Api\Domain\UsernameKey;
 use Sstf\Api\Infrastructure\Google\GoogleIdTokenVerifierInterface;
 use Sstf\Api\Infrastructure\Session\SessionService;
 use Sstf\Api\Infrastructure\Sqlite\UserDirectory;
@@ -45,84 +49,94 @@ final class AuthService
         }
 
         try {
-            $key = EmailKey::fromEmail($verified->email);
+            $email = EmailKey::fromEmail($verified->email);
         } catch (InvalidArgumentException) {
             throw new InvalidGoogleIdTokenException();
         }
 
+        $mapped = $this->users->repoHashForLogin('google', $email->normalized());
+        $repoHash = $mapped ?? RepoKey::google($email->normalized())->hash();
         $account = $this->users->provisionGoogleUser(
-            $key,
+            $repoHash,
             $verified->email,
+            $email->normalized(),
             $verified->subject,
             $timezone,
         );
 
         return [
             'account' => $account,
-            'cookie' => $this->sessions->create($key->hash()),
+            'cookie' => $this->sessions->create($repoHash),
         ];
     }
 
     /**
      * @return array{account: AccountSnapshot, cookie: string}
      */
-    public function signInWithPassword(string $email, string $password): array
+    public function signInWithPassword(string $username, string $password): array
     {
         try {
-            $key = EmailKey::fromEmail($email);
+            $login = UsernameKey::fromUsername($username);
         } catch (InvalidArgumentException) {
             throw new InvalidCredentialsException();
         }
 
-        if (!$this->users->userFileExists($key->hash())) {
+        $repoHash = $this->users->repoHashForLogin('password', $login->normalized());
+        if ($repoHash === null) {
             throw new InvalidCredentialsException();
         }
 
-        $stored = $this->users->passwordHash($key->hash());
+        $stored = $this->users->passwordHash($repoHash);
         if ($stored === null || !password_verify($password, $stored)) {
             throw new InvalidCredentialsException();
         }
 
-        $account = $this->users->loadAccount($key->hash());
+        $account = $this->users->loadAccount($repoHash);
         if ($account === null) {
             throw new InvalidCredentialsException();
         }
 
         return [
             'account' => $account,
-            'cookie' => $this->sessions->create($key->hash()),
+            'cookie' => $this->sessions->create($repoHash),
         ];
     }
 
     /**
      * @return array{account: AccountSnapshot, cookie: string}
      */
-    public function registerWithPassword(string $email, string $password, ?string $timezone): array
+    public function registerWithPassword(string $username, string $password, ?string $timezone): array
     {
         if ($password === '') {
             throw new InvalidPasswordException();
         }
 
         try {
-            $key = EmailKey::fromEmail($email);
+            $login = UsernameKey::fromUsername($username);
         } catch (InvalidArgumentException) {
             throw new InvalidCredentialsException();
         }
 
-        if ($this->users->userFileExists($key->hash())) {
-            throw new InvalidCredentialsException();
+        if ($this->users->repoHashForLogin('password', $login->normalized()) !== null) {
+            throw new AccountExistsException();
         }
 
-        $account = $this->users->provisionPasswordUser(
-            $key,
-            $email,
-            $this->hashPassword($password),
-            $timezone,
-        );
+        $repoHash = RepoKey::password($login->normalized())->hash();
+        try {
+            $account = $this->users->provisionPasswordUser(
+                $repoHash,
+                $username,
+                $login->normalized(),
+                $this->hashPassword($password),
+                $timezone,
+            );
+        } catch (LoginTakenException) {
+            throw new AccountExistsException();
+        }
 
         return [
             'account' => $account,
-            'cookie' => $this->sessions->create($key->hash()),
+            'cookie' => $this->sessions->create($repoHash),
         ];
     }
 
@@ -179,7 +193,11 @@ final class AuthService
         }
 
         if ($passwordHashToSet !== null) {
-            $account = $this->users->setPasswordHash($emailHash, $passwordHashToSet);
+            try {
+                $account = $this->users->setPasswordHash($emailHash, $passwordHashToSet);
+            } catch (LoginTakenException) {
+                throw new AccountExistsException();
+            }
             if ($account === null) {
                 throw new UnauthenticatedException();
             }

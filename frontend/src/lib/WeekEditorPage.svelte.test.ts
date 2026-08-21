@@ -248,4 +248,50 @@ describe('WeekEditorPage', () => {
     });
     expect(screen.queryByText(/1 exercises/)).not.toBeInTheDocument();
   });
+
+  it('removes a set after confirm and surfaces delete errors', async () => {
+    const removeSet = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false as const,
+        status: 404,
+        code: 'not_found',
+        message: 'Set not found',
+      })
+      .mockResolvedValueOnce({ ok: true as const });
+    const loadSets = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, sets: [evening] })
+      .mockResolvedValue({ ok: true, sets: [] });
+    render(WeekEditorPage, {
+      props: {
+        scheduleId: 1,
+        today: () => 3,
+        loadSets,
+        removeSet,
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Remove Evening' })).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Evening' }));
+    expect(screen.getByTestId('confirm-sheet')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByTestId('confirm-sheet')).not.toBeInTheDocument();
+    expect(removeSet).not.toHaveBeenCalled();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Evening' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove set' }));
+    await waitFor(() => {
+      expect(removeSet).toHaveBeenCalledWith(9);
+      expect(screen.getByRole('alert')).toHaveTextContent('Set not found');
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Evening' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove set' }));
+    await waitFor(() => {
+      expect(removeSet).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('No sets on this day yet.')).toBeInTheDocument();
+    });
+  });
 });

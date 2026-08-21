@@ -1,5 +1,5 @@
 import { apiFetch, parseApiData, parseApiError } from './api';
-import { messageForAuthCode, messageForPasswordCode } from './authErrors';
+import { messageForAuthCode, messageForPasswordCode, messageForRegisterCode } from './authErrors';
 
 export type Identity = { provider: string };
 
@@ -101,7 +101,7 @@ export async function signInWithGoogle(
 }
 
 export async function signInWithPassword(
-  email: string,
+  username: string,
   password: string,
   fetcher: typeof fetch = fetch,
 ): Promise<SignInResult> {
@@ -110,7 +110,7 @@ export async function signInWithPassword(
       '/api/auth/password',
       {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       },
       fetcher,
     );
@@ -126,6 +126,36 @@ export async function signInWithPassword(
     return { ok: true, me };
   } catch {
     return { ok: false, code: 'invalid_credentials', message: messageForPasswordCode('invalid_credentials') };
+  }
+}
+
+export async function registerWithPassword(
+  username: string,
+  password: string,
+  timezone: string,
+  fetcher: typeof fetch = fetch,
+): Promise<SignInResult> {
+  try {
+    const { status, body } = await apiFetch(
+      '/api/auth/register',
+      {
+        method: 'POST',
+        body: JSON.stringify({ username, password, timezone }),
+      },
+      fetcher,
+    );
+    if (status !== 200) {
+      const error = parseApiError(body);
+      const code = error?.code ?? 'invalid_request';
+      return { ok: false, code, message: messageForRegisterCode(code) };
+    }
+    const me = parseMe(body);
+    if (me === null) {
+      return { ok: false, code: 'invalid_request', message: messageForRegisterCode('invalid_request') };
+    }
+    return { ok: true, me };
+  } catch {
+    return { ok: false, code: 'invalid_request', message: messageForRegisterCode('invalid_request') };
   }
 }
 

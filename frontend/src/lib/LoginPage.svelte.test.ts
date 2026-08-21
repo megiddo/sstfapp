@@ -4,7 +4,7 @@ import LoginPage from './LoginPage.svelte';
 import type { GoogleIdentity } from './googleIdentity';
 
 describe('LoginPage', () => {
-  it('renders SSTF copy, Google button container, and account note', async () => {
+  it('renders SSTF copy and Google button container', async () => {
     const gis: GoogleIdentity = {
       initialize: vi.fn(),
       renderButton: vi.fn(),
@@ -23,17 +23,53 @@ describe('LoginPage', () => {
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('SSTF');
     expect(screen.getByText('Single set to failure.')).toBeInTheDocument();
-    expect(screen.getByText(/Google or email\/password/i)).toBeInTheDocument();
-    expect(screen.getByText(/Both use the same email/i)).toBeInTheDocument();
     expect(screen.getByTestId('google-button')).toBeInTheDocument();
-    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByLabelText('Username')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Sign in' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Create account' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
 
     await waitFor(() => {
       expect(gis.renderButton).toHaveBeenCalled();
     });
     expect(gis.prompt).not.toHaveBeenCalled();
+  });
+
+  it('lets password registration work when Google is not configured', async () => {
+    const navigate = vi.fn();
+    const passwordRegister = vi.fn(async () => ({
+      ok: true as const,
+      me: {
+        email: 'new@example.com',
+        timezone: 'UTC',
+        weight_unit: 'lb' as const,
+        identities: [{ provider: 'password' }],
+      },
+    }));
+    render(LoginPage, {
+      props: {
+        clientId: '',
+        timeZone: () => 'America/Chicago',
+        passwordRegister,
+        navigate,
+      },
+    });
+
+    expect(screen.getByTestId('google-unavailable')).toHaveTextContent("Google sign-in isn't configured.");
+    expect(screen.queryByTestId('login-error')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('google-button')).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'Create account' }));
+    await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'new@example.com' } });
+    await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'secret' } });
+    await fireEvent.input(screen.getByLabelText('Confirm password'), { target: { value: 'secret' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+
+    await waitFor(() => {
+      expect(passwordRegister).toHaveBeenCalledWith('new@example.com', 'secret', 'America/Chicago');
+      expect(navigate).toHaveBeenCalledWith('/');
+    });
   });
 
   it('shows Google sign-in failed when GIS cannot load', async () => {
@@ -59,19 +95,6 @@ describe('LoginPage', () => {
         clientId: 'client-id',
         loadGis: async () => document.createElement('script'),
         readGis: () => null,
-        navigate: vi.fn(),
-      },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('login-error')).toHaveTextContent('Google sign-in failed');
-    });
-  });
-
-  it('shows Google sign-in failed when client id is missing', async () => {
-    render(LoginPage, {
-      props: {
-        clientId: '',
         navigate: vi.fn(),
       },
     });
@@ -168,15 +191,15 @@ describe('LoginPage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('signs in with email and password', async () => {
+  it('signs in with username and password', async () => {
     const navigate = vi.fn();
-    const passwordSignIn = vi.fn(async (email: string, password: string) => {
-      expect(email).toBe('lifter@example.com');
+    const passwordSignIn = vi.fn(async (username: string, password: string) => {
+      expect(username).toBe('lifter@example.com');
       expect(password).toBe('secret');
       return {
         ok: true as const,
         me: {
-          email,
+          email: username,
           timezone: 'UTC',
           weight_unit: 'lb' as const,
           identities: [{ provider: 'password' }],
@@ -198,7 +221,7 @@ describe('LoginPage', () => {
       },
     });
 
-    await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'lifter@example.com' } });
+    await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'lifter@example.com' } });
     await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'secret' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
@@ -236,7 +259,7 @@ describe('LoginPage', () => {
       },
     });
 
-    await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } });
+    await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'a@b.com' } });
     await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'x' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     await waitFor(() => {
@@ -276,7 +299,7 @@ describe('LoginPage', () => {
       },
     });
 
-    await fireEvent.input(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } });
+    await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'a@b.com' } });
     await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'x' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -288,5 +311,57 @@ describe('LoginPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Sign in' })).not.toBeDisabled();
     });
+  });
+
+  it('blocks create account when passwords do not match', async () => {
+    const passwordRegister = vi.fn();
+    render(LoginPage, {
+      props: {
+        clientId: '',
+        passwordRegister,
+        navigate: vi.fn(),
+      },
+    });
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'Create account' }));
+    await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'a@b.com' } });
+    await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'one' } });
+    await fireEvent.input(screen.getByLabelText('Confirm password'), { target: { value: 'two' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('login-error')).toHaveTextContent('Passwords do not match');
+    });
+    expect(passwordRegister).not.toHaveBeenCalled();
+  });
+
+  it('shows Account already exists from register and clears it when switching to sign in', async () => {
+    const passwordRegister = vi.fn(async () => ({
+      ok: false as const,
+      code: 'account_exists',
+      message: 'Account already exists',
+    }));
+    render(LoginPage, {
+      props: {
+        clientId: '',
+        passwordRegister,
+        navigate: vi.fn(),
+      },
+    });
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'Create account' }));
+    await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'a@b.com' } });
+    await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'secret' } });
+    await fireEvent.input(screen.getByLabelText('Confirm password'), { target: { value: 'secret' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('login-error')).toHaveTextContent('Account already exists');
+    });
+
+    await fireEvent.click(screen.getByRole('tab', { name: 'Sign in' }));
+    expect(screen.queryByTestId('login-error')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Confirm password')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
   });
 });

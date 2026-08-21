@@ -11,6 +11,7 @@ use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
 use Sstf\Api\Domain\ClockInterface;
+use Sstf\Api\Domain\RepoKey;
 use Sstf\Api\Infrastructure\Google\GoogleIdTokenVerifierInterface;
 use Sstf\Api\Tests\Fakes\FakeClock;
 use Sstf\Api\Tests\Fakes\FakeGoogleIdTokenVerifier;
@@ -127,9 +128,13 @@ abstract class HttpTestCase extends TestCase
         $this->clock->setTimestamp($at->getTimestamp());
     }
 
-    protected function userDbPath(string $email): string
+    protected function userDbPath(string $login, string $provider = 'google'): string
     {
-        return $this->dataDir . '/users/' . md5(strtolower(trim($email))) . '.sqlite';
+        $hash = $provider === 'password'
+            ? RepoKey::password($login)->hash()
+            : RepoKey::google($login)->hash();
+
+        return $this->dataDir . '/users/' . $hash . '.sqlite';
     }
 
     protected function signIn(string $email, ?string $timezone = null): void

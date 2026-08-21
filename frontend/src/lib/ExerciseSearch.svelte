@@ -6,15 +6,36 @@
     results,
     onQuery,
     onPick,
+    onAdd,
   }: {
     query: string;
     results: Exercise[];
     onQuery: (value: string) => void;
     onPick: (exercise: Exercise) => void;
+    onAdd: (name: string) => void;
   } = $props();
+
+  let trimmed = $derived(query.trim());
+  let matched = $derived(
+    trimmed === ''
+      ? null
+      : (results.find((exercise) => exercise.name.toLowerCase() === trimmed.toLowerCase()) ?? null),
+  );
+  let canAdd = $derived(trimmed !== '' && matched === null);
+
+  function handleSubmit(event: SubmitEvent) {
+    event.preventDefault();
+    if (matched !== null) {
+      onPick(matched);
+      return;
+    }
+    if (canAdd) {
+      onAdd(trimmed);
+    }
+  }
 </script>
 
-<div class="search">
+<form class="search" onsubmit={handleSubmit}>
   <label>
     Search catalog
     <input
@@ -22,6 +43,7 @@
       value={query}
       placeholder="Bench, squat…"
       autocomplete="off"
+      enterkeyhint="search"
       oninput={(event) => onQuery(event.currentTarget.value)}
     />
   </label>
@@ -37,10 +59,12 @@
       </li>
     {/each}
   </ul>
-  {#if results.length === 0}
+  {#if canAdd}
+    <button type="submit" class="add" data-testid="add-typed-exercise">Add {trimmed}</button>
+  {:else if results.length === 0}
     <p class="none" data-testid="search-empty">No matching exercises.</p>
   {/if}
-</div>
+</form>
 
 <style>
   label {
@@ -81,6 +105,14 @@
     margin-bottom: 0.4rem;
     cursor: pointer;
     text-align: left;
+  }
+
+  .add {
+    margin-top: 0.75rem;
+    justify-content: center;
+    background: #e8a04a;
+    color: #121212;
+    font-weight: 600;
   }
 
   .meta {

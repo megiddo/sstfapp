@@ -6,8 +6,8 @@ namespace Sstf\Api\Tests\Integration;
 
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
-use Sstf\Api\Domain\EmailKey;
 use Sstf\Api\Domain\InvalidGoogleIdTokenException;
+use Sstf\Api\Domain\RepoKey;
 use Sstf\Api\Http\Controllers\AuthController;
 use Sstf\Api\Http\Controllers\MeController;
 use Sstf\Api\Http\JsonResponder;
@@ -88,8 +88,9 @@ final class AuthGoogleTest extends HttpTestCase
         $this->assertSame(200, $second->getStatusCode());
         $this->assertFileExists($path);
 
-        $matches = glob($this->dataDir . '/users/' . md5(strtolower($email)) . '.sqlite') ?: [];
+        $matches = glob($this->dataDir . '/users/*.sqlite') ?: [];
         $this->assertCount(1, $matches);
+        $this->assertSame($path, $matches[0]);
 
         $me = $this->request('GET', '/api/me');
         $this->assertSame(200, $me->getStatusCode());
@@ -105,15 +106,15 @@ final class AuthGoogleTest extends HttpTestCase
     public function testExistingFileMissingGoogleIdentityIsLinked(): void
     {
         $email = 'link-' . bin2hex(random_bytes(4)) . '@example.com';
-        $key = EmailKey::fromEmail($email);
+        $hash = RepoKey::google($email)->hash();
         $container = $this->app->getContainer();
         $this->assertNotNull($container);
         $factory = $container->get(UserDbFactory::class);
-        $pdo = $factory->open($key->hash());
+        $pdo = $factory->open($hash);
         $now = gmdate('c');
         $pdo->exec(
             "INSERT INTO account (id, email, email_normalized, password_hash, timezone, weight_unit, created_at, updated_at)
-             VALUES (1, " . $pdo->quote($email) . ", " . $pdo->quote($key->normalized()) . ", NULL, 'UTC', 'lb', " . $pdo->quote($now) . ", " . $pdo->quote($now) . ")",
+             VALUES (1, " . $pdo->quote($email) . ", " . $pdo->quote(strtolower($email)) . ", NULL, 'UTC', 'lb', " . $pdo->quote($now) . ", " . $pdo->quote($now) . ")",
         );
         $count = (int) $pdo->query("SELECT COUNT(*) FROM identities WHERE provider = 'google'")->fetchColumn();
         $this->assertSame(0, $count);
@@ -122,7 +123,7 @@ final class AuthGoogleTest extends HttpTestCase
         $response = $this->request('POST', '/api/auth/google', ['id_token' => 'link-token']);
         $this->assertSame(200, $response->getStatusCode());
 
-        $matches = glob($this->dataDir . '/users/' . $key->hash() . '.sqlite') ?: [];
+        $matches = glob($this->dataDir . '/users/' . $hash . '.sqlite') ?: [];
         $this->assertCount(1, $matches);
 
         $pdo = new PDO('sqlite:' . $this->userDbPath($email));
@@ -225,7 +226,7 @@ final class AuthGoogleTest extends HttpTestCase
 
         $rows = $pdo->query('SELECT email_hash, created_at FROM user_index')->fetchAll(PDO::FETCH_ASSOC);
         $this->assertCount(1, $rows);
-        $hash = md5(strtolower($email));
+        $hash = RepoKey::google($email)->hash();
         $this->assertSame($hash, $rows[0]['email_hash']);
         $this->assertSame(32, strlen($rows[0]['email_hash']));
         $this->assertStringNotContainsString('@', $rows[0]['email_hash']);

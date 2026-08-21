@@ -10,8 +10,9 @@ describe('ExerciseSearch', () => {
   it('lists tappable catalog rows and reports query changes', async () => {
     const onQuery = vi.fn();
     const onPick = vi.fn();
+    const onAdd = vi.fn();
     render(ExerciseSearch, {
-      props: { query: 'ben', results: [bench, squat, blankMeta], onQuery, onPick },
+      props: { query: 'ben', results: [bench, squat, blankMeta], onQuery, onPick, onAdd },
     });
 
     expect(screen.getByText('Bench Press')).toBeInTheDocument();
@@ -19,6 +20,7 @@ describe('ExerciseSearch', () => {
     expect(screen.getByText('Squat')).toBeInTheDocument();
     expect(screen.getByText('Custom')).toBeInTheDocument();
     expect(screen.queryByTestId('search-empty')).not.toBeInTheDocument();
+    expect(screen.getByTestId('add-typed-exercise')).toHaveTextContent('Add ben');
 
     await fireEvent.click(screen.getByRole('button', { name: /Bench Press/ }));
     expect(onPick).toHaveBeenCalledWith(bench);
@@ -29,10 +31,54 @@ describe('ExerciseSearch', () => {
     expect(onQuery).toHaveBeenCalledWith('row');
   });
 
-  it('shows an empty search state', () => {
+  it('adds the typed name when it is not an exact catalog match', async () => {
+    const onPick = vi.fn();
+    const onAdd = vi.fn();
     render(ExerciseSearch, {
-      props: { query: 'zzzz', results: [], onQuery: () => undefined, onPick: () => undefined },
+      props: { query: '  Landmine Press  ', results: [bench], onQuery: () => undefined, onPick, onAdd },
+    });
+
+    expect(screen.queryByTestId('search-empty')).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByTestId('add-typed-exercise'));
+    expect(onAdd).toHaveBeenCalledWith('Landmine Press');
+    expect(onPick).not.toHaveBeenCalled();
+  });
+
+  it('submits an exact match instead of creating a duplicate', async () => {
+    const onPick = vi.fn();
+    const onAdd = vi.fn();
+    render(ExerciseSearch, {
+      props: { query: 'bench press', results: [bench], onQuery: () => undefined, onPick, onAdd },
+    });
+
+    expect(screen.queryByTestId('add-typed-exercise')).not.toBeInTheDocument();
+    await fireEvent.submit(screen.getByLabelText('Search catalog').closest('form') as HTMLFormElement);
+    expect(onPick).toHaveBeenCalledWith(bench);
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it('shows an empty search state when the query is blank', () => {
+    render(ExerciseSearch, {
+      props: {
+        query: '',
+        results: [],
+        onQuery: () => undefined,
+        onPick: () => undefined,
+        onAdd: () => undefined,
+      },
     });
     expect(screen.getByTestId('search-empty')).toHaveTextContent('No matching exercises.');
+    expect(screen.queryByTestId('add-typed-exercise')).not.toBeInTheDocument();
+  });
+
+  it('ignores submit when the query is blank', async () => {
+    const onPick = vi.fn();
+    const onAdd = vi.fn();
+    render(ExerciseSearch, {
+      props: { query: '   ', results: [], onQuery: () => undefined, onPick, onAdd },
+    });
+    await fireEvent.submit(screen.getByLabelText('Search catalog').closest('form') as HTMLFormElement);
+    expect(onPick).not.toHaveBeenCalled();
+    expect(onAdd).not.toHaveBeenCalled();
   });
 });

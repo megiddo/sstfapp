@@ -6,9 +6,11 @@ namespace Sstf\Api\Http\Controllers;
 
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
+use Sstf\Api\Domain\AccountExistsException;
 use Sstf\Api\Domain\EmailUnverifiedException;
 use Sstf\Api\Domain\InvalidCredentialsException;
 use Sstf\Api\Domain\InvalidGoogleIdTokenException;
+use Sstf\Api\Domain\InvalidPasswordException;
 use Sstf\Api\Http\JsonResponder;
 use Sstf\Api\Infrastructure\Session\SessionService;
 use Sstf\Api\Services\AuthService;
@@ -57,7 +59,7 @@ final class AuthController
             return JsonResponder::error('invalid_request', 'Sign-in failed', 400);
         }
 
-        $email = $body['email'] ?? null;
+        $email = $body['username'] ?? $body['email'] ?? null;
         $password = $body['password'] ?? null;
         if (!is_string($email) || trim($email) === '' || !is_string($password) || $password === '') {
             return JsonResponder::error('invalid_request', 'Sign-in failed', 400);
@@ -67,6 +69,38 @@ final class AuthController
             $result = $this->auth->signInWithPassword($email, $password);
         } catch (InvalidCredentialsException) {
             return JsonResponder::error('invalid_credentials', 'Sign-in failed', 401);
+        }
+
+        return JsonResponder::data($result['account']->toApi())
+            ->withAddedHeader('Set-Cookie', $this->sessions->setCookieHeader($result['cookie']));
+    }
+
+    public function register(Request $request, Response $response): Response
+    {
+        $body = $request->getParsedBody();
+        if (!is_array($body)) {
+            return JsonResponder::error('invalid_request', 'Registration failed', 400);
+        }
+
+        $email = $body['username'] ?? $body['email'] ?? null;
+        $password = $body['password'] ?? null;
+        if (!is_string($email) || trim($email) === '' || !is_string($password)) {
+            return JsonResponder::error('invalid_request', 'Registration failed', 400);
+        }
+
+        $timezone = $body['timezone'] ?? null;
+        if ($timezone !== null && !is_string($timezone)) {
+            $timezone = null;
+        }
+
+        try {
+            $result = $this->auth->registerWithPassword($email, $password, $timezone);
+        } catch (InvalidPasswordException) {
+            return JsonResponder::error('invalid_password', 'Enter a password', 400);
+        } catch (AccountExistsException) {
+            return JsonResponder::error('account_exists', 'Account already exists', 409);
+        } catch (InvalidCredentialsException) {
+            return JsonResponder::error('invalid_request', 'Registration failed', 400);
         }
 
         return JsonResponder::data($result['account']->toApi())

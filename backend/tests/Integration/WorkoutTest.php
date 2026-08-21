@@ -77,6 +77,8 @@ final class WorkoutTest extends HttpTestCase
         $this->assertSame('Chest', $data['exercises'][0]['muscle_group']);
         $this->assertNull($data['exercises'][0]['last_weight']);
         $this->assertNull($data['exercises'][0]['last_reps']);
+        $this->assertNull($data['exercises'][0]['best_weight']);
+        $this->assertNull($data['exercises'][0]['best_reps']);
         $this->assertSame('Barbell Row', $data['exercises'][1]['name']);
         $this->assertNull($data['exercises'][1]['last_weight']);
 
@@ -103,6 +105,8 @@ final class WorkoutTest extends HttpTestCase
         $this->assertSame('Evening', $after['set']['name']);
         $this->assertEquals(190, $after['exercises'][0]['last_weight']);
         $this->assertSame(6, $after['exercises'][0]['last_reps']);
+        $this->assertEquals(190, $after['exercises'][0]['best_weight']);
+        $this->assertSame(6, $after['exercises'][0]['best_reps']);
         $this->assertNull($after['exercises'][1]['last_weight']);
     }
 
@@ -181,6 +185,53 @@ final class WorkoutTest extends HttpTestCase
         $this->assertSame('Evening', $evening['set']['name']);
         $this->assertEquals(200, $evening['exercises'][0]['last_weight']);
         $this->assertSame(5, $evening['exercises'][0]['last_reps']);
+        $this->assertEquals(200, $evening['exercises'][0]['best_weight']);
+        $this->assertSame(5, $evening['exercises'][0]['best_reps']);
+    }
+
+    public function testBestPrefersHeavierWeightThenHigherReps(): void
+    {
+        $this->signIn('best-' . bin2hex(random_bytes(4)) . '@example.com', 'America/Chicago');
+        $seeded = $this->seedHypertrophyWeek();
+
+        $this->freezeAt('2026-08-17 18:40:00', 'America/Chicago');
+        $this->assertSame(200, $this->request('POST', '/api/logs', [
+            'set_id' => $seeded['eveningId'],
+            'global_exercise_id' => $seeded['benchId'],
+            'weight' => 180,
+            'reps' => 10,
+        ])->getStatusCode());
+
+        $this->freezeAt('2026-08-18 18:40:00', 'America/Chicago');
+        $this->assertSame(200, $this->request('POST', '/api/logs', [
+            'set_id' => $seeded['eveningId'],
+            'global_exercise_id' => $seeded['benchId'],
+            'weight' => 200,
+            'reps' => 4,
+        ])->getStatusCode());
+
+        $this->freezeAt('2026-08-19 18:40:00', 'America/Chicago');
+        $this->assertSame(200, $this->request('POST', '/api/logs', [
+            'set_id' => $seeded['eveningId'],
+            'global_exercise_id' => $seeded['benchId'],
+            'weight' => 200,
+            'reps' => 6,
+        ])->getStatusCode());
+
+        $this->freezeAt('2026-08-19 19:00:00', 'America/Chicago');
+        $this->assertSame(200, $this->request('POST', '/api/logs', [
+            'set_id' => $seeded['eveningId'],
+            'global_exercise_id' => $seeded['benchId'],
+            'weight' => 190,
+            'reps' => 8,
+        ])->getStatusCode());
+
+        $current = $this->json($this->request('GET', '/api/workout/current?set_id=' . $seeded['eveningId']))['data'];
+        $this->assertSame('Evening', $current['set']['name']);
+        $this->assertEquals(190, $current['exercises'][0]['last_weight']);
+        $this->assertSame(8, $current['exercises'][0]['last_reps']);
+        $this->assertEquals(200, $current['exercises'][0]['best_weight']);
+        $this->assertSame(6, $current['exercises'][0]['best_reps']);
     }
 
     public function testSwitcherMarksClosestAndEmptyStates(): void

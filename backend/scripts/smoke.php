@@ -16,6 +16,7 @@ use Psr\Http\Message\ResponseInterface;
 use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
+use Sstf\Api\Domain\RepoKey;
 use Sstf\Api\Infrastructure\Google\GoogleIdTokenVerifierInterface;
 use Sstf\Api\Tests\Fakes\FakeGoogleIdTokenVerifier;
 
@@ -99,7 +100,7 @@ try {
         fail('Export is not a SQLite file');
     }
 
-    $userFile = $tmp . '/users/' . md5($email) . '.sqlite';
+    $userFile = $tmp . '/users/' . RepoKey::google($email)->hash() . '.sqlite';
     if (!is_file($userFile)) {
         fail('User sqlite missing at ' . $userFile);
     }

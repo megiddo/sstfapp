@@ -6,6 +6,7 @@ namespace Sstf\Api\Http\Controllers;
 
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
+use Sstf\Api\Domain\AccountExistsException;
 use Sstf\Api\Domain\InvalidCurrentPasswordException;
 use Sstf\Api\Domain\InvalidPasswordException;
 use Sstf\Api\Domain\InvalidTimezoneException;
@@ -94,6 +95,8 @@ final class MeController
             return JsonResponder::error('invalid_password', 'Invalid password', 400);
         } catch (InvalidCurrentPasswordException) {
             return JsonResponder::error('invalid_current_password', 'Current password is incorrect', 400);
+        } catch (AccountExistsException) {
+            return JsonResponder::error('account_exists', 'Account already exists', 409);
         }
 
         return JsonResponder::data($account->toApi());

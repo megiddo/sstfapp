@@ -142,7 +142,9 @@ final class WorkoutService
      *   muscle_group: ?string,
      *   equipment: ?string,
      *   last_weight: ?float,
-     *   last_reps: ?int
+     *   last_reps: ?int,
+     *   best_weight: ?float,
+     *   best_reps: ?int
      * }>
      */
     private function prefillExercises(string $emailHash, TrainingSet $set): array
@@ -150,11 +152,13 @@ final class WorkoutService
         $out = [];
         foreach ($set->exercises as $exercise) {
             $prefill = null;
+            $best = null;
             if ($exercise->globalExerciseId !== null) {
                 $prefill = $this->logs->latestForSetExercise($emailHash, $set->id, $exercise->globalExerciseId);
                 if ($prefill === null) {
                     $prefill = $this->logs->latestForExercise($emailHash, $exercise->globalExerciseId);
                 }
+                $best = $this->logs->bestForExercise($emailHash, $exercise->globalExerciseId);
             }
             $out[] = [
                 'id' => $exercise->id,
@@ -164,6 +168,8 @@ final class WorkoutService
                 'equipment' => $exercise->equipment,
                 'last_weight' => $prefill?->weight,
                 'last_reps' => $prefill?->reps,
+                'best_weight' => $best?->weight,
+                'best_reps' => $best?->reps,
             ];
         }
 

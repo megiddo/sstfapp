@@ -121,10 +121,10 @@ describe('SetExerciseEditorPage', () => {
     });
   });
 
-  it('creates a catalog exercise then adds it', async () => {
+  it('creates a catalog exercise from the typed search and adds it', async () => {
     const addCatalogExercise = vi.fn(async () => ({
       ok: true as const,
-      exercise: { id: 40, name: 'Landmine Press', muscle_group: 'Shoulders', equipment: 'Barbell', notes: null },
+      exercise: { id: 40, name: 'Landmine Press', muscle_group: null, equipment: null, notes: null },
     }));
     const saveExercises = vi.fn(async () => ({ ok: true as const, set: evening }));
     render(SetExerciseEditorPage, {
@@ -138,21 +138,18 @@ describe('SetExerciseEditorPage', () => {
       },
     });
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Add new exercise' })).toBeInTheDocument();
+      expect(screen.getByLabelText('Search catalog')).toBeInTheDocument();
     });
-    const inputs = screen.getAllByRole('textbox');
-    await fireEvent.input(inputs[inputs.length - 3], { target: { value: 'Landmine Press' } });
-    await fireEvent.input(inputs[inputs.length - 2], { target: { value: 'Shoulders' } });
-    await fireEvent.input(inputs[inputs.length - 1], { target: { value: 'Barbell' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Add new exercise' }));
+    await fireEvent.input(screen.getByLabelText('Search catalog'), { target: { value: 'Landmine Press' } });
     await waitFor(() => {
-      expect(addCatalogExercise).toHaveBeenCalledWith({
-        name: 'Landmine Press',
-        muscle_group: 'Shoulders',
-        equipment: 'Barbell',
-      });
+      expect(screen.getByTestId('add-typed-exercise')).toHaveTextContent('Add Landmine Press');
+    });
+    await fireEvent.click(screen.getByTestId('add-typed-exercise'));
+    await waitFor(() => {
+      expect(addCatalogExercise).toHaveBeenCalledWith({ name: 'Landmine Press' });
       expect(saveExercises).toHaveBeenCalledWith(9, [1, 2, 40]);
     });
+    expect(screen.getByLabelText('Search catalog')).toHaveValue('');
   });
 
   it('shows empty set copy and load errors', async () => {
@@ -251,11 +248,54 @@ describe('SetExerciseEditorPage', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Schedule not found');
     });
-    const nameInput = screen.getByRole('textbox', { name: 'Name' });
-    await fireEvent.input(nameInput, { target: { value: 'Landmine Press' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Add new exercise' }));
+    await fireEvent.input(screen.getByLabelText('Search catalog'), { target: { value: 'Landmine Press' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('add-typed-exercise')).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByTestId('add-typed-exercise'));
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Exercise name already exists');
+    });
+  });
+
+  it('does not create the same typed exercise twice while the first request is in flight', async () => {
+    let release: (value: {
+      ok: true;
+      exercise: { id: number; name: string; muscle_group: null; equipment: null; notes: null };
+    }) => void = () => undefined;
+    const addCatalogExercise = vi.fn(
+      () =>
+        new Promise<{
+          ok: true;
+          exercise: { id: number; name: string; muscle_group: null; equipment: null; notes: null };
+        }>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const saveExercises = vi.fn(async () => ({ ok: true as const, set: evening }));
+    render(SetExerciseEditorPage, {
+      props: {
+        scheduleId: 1,
+        setId: 9,
+        loadSets: async () => ({ ok: true as const, sets: [evening] }),
+        saveExercises,
+        searchExercises: async () => ({ ok: true as const, exercises: [] }),
+        addCatalogExercise,
+      },
+    });
+    await fireEvent.input(screen.getByLabelText('Search catalog'), { target: { value: 'Landmine Press' } });
+    await waitFor(() => {
+      expect(screen.getByTestId('add-typed-exercise')).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByTestId('add-typed-exercise'));
+    await fireEvent.click(screen.getByTestId('add-typed-exercise'));
+    expect(addCatalogExercise).toHaveBeenCalledTimes(1);
+    release({
+      ok: true,
+      exercise: { id: 40, name: 'Landmine Press', muscle_group: null, equipment: null, notes: null },
+    });
+    await waitFor(() => {
+      expect(saveExercises).toHaveBeenCalledWith(9, [1, 2, 40]);
     });
   });
 });
