@@ -28,9 +28,9 @@ docker compose -f docker/compose.dev.yml up --build
 ```
 
 - SPA: [http://localhost:5173](http://localhost:5173)
-- API (direct): [http://localhost:8080/api/health](http://localhost:8080/api/health)
+- API (direct): [http://localhost:27180/api/health](http://localhost:27180/api/health)
 
-Vite proxies `/api` → `http://api:8080` inside Compose (or `http://localhost:8080` on the host). Same-origin from the browser.
+Vite proxies `/api` → `http://api:27180` inside Compose (or `http://localhost:27180` on the host). Same-origin from the browser.
 
 `backend/vendor` and `frontend/node_modules` are named volumes so Google Drive does not sync them. SQLite is **not** in those volumes: both Compose files bind-mount host `./data` at `/data`, so accounts survive image rebuilds.
 
@@ -121,7 +121,7 @@ Do not rename the file to a different hash. A different Google email or a passwo
 3. Application type: **Web application**.
 4. Authorized JavaScript origins:
    - `http://localhost:5173` (Compose Vite)
-   - `http://localhost:8080` if you hit the API origin directly
+   - `http://localhost:27180` if you hit the API origin directly
    - your production HTTPS origin when you deploy
 5. Authorized redirect URIs are not required for the GIS button (ID token to `/api/auth/google`). Add them only if you later use a redirect flow.
 6. Copy the client ID into `.env` as both `GOOGLE_CLIENT_ID` and `PUBLIC_GOOGLE_CLIENT_ID`.
@@ -140,4 +140,4 @@ Without Compose:
 
 ## PHP / Node without Docker
 
-Possible but unsupported as the quality-gate path. Use PHP 8.2+ with `pdo_sqlite` + Composer in `backend/`, and Node 22 in `frontend/`. Point `DATA_PATH` at `./data` and Vite `API_PROXY_TARGET` at `http://localhost:8080`.
+Possible but unsupported as the quality-gate path. Use PHP 8.2+ with `pdo_sqlite` + Composer in `backend/`, and Node 22 in `frontend/`. Point `DATA_PATH` at `./data` and Vite `API_PROXY_TARGET` at `http://localhost:27180`.

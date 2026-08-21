@@ -10,7 +10,7 @@ services:
       context: ../backend
       dockerfile: ../docker/Dockerfile.api
     ports:
-      - "${API_PORT:-8080}:8080"
+      - "${API_PORT:-27180}:27180"
     env_file:
       - ../.env
     environment:
@@ -27,7 +27,7 @@ services:
     working_dir: /app
     command: >
       sh -c "composer install --no-interaction --prefer-dist
-      && php -S 0.0.0.0:8080 -t public public/index.php"
+      && php -S 0.0.0.0:27180 -t public public/index.php"
 
   web:
     build:
@@ -36,7 +36,7 @@ services:
     ports:
       - "${WEB_PORT:-5173}:5173"
     environment:
-      API_PROXY_TARGET: http://api:8080
+      API_PROXY_TARGET: http://api:27180
       PUBLIC_GOOGLE_CLIENT_ID: ${PUBLIC_GOOGLE_CLIENT_ID:-${GOOGLE_CLIENT_ID:-}}
     volumes:
       - ../frontend:/app

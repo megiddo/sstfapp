@@ -23,7 +23,7 @@ services:
       - ../data:/data
     restart: unless-stopped
     expose:
-      - "8080"
+      - "27180"
     healthcheck:
       test: ["CMD", "php", "/app/scripts/healthcheck.php"]
       interval: 30s
