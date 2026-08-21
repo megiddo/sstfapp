@@ -1,0 +1,39 @@
+{
+    "name": "sstf/api",
+    "description": "Single Set to Failure workout tracker API",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "php-di/php-di": "^7.0",
+        "slim/psr7": "^1.7",
+        "slim/slim": "^4.14",
+        "vlucas/phpdotenv": "^5.6"
+    },
+    "require-dev": {
+        "infection/infection": "^0.29",
+        "phpunit/phpunit": "^11.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Sstf\\Api\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Sstf\\Api\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "infection": "infection --min-msi=80 --threads=4",
+        "smoke": "php scripts/smoke.php"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "infection/extension-installer": true
+        }
+    },
+    "minimum-stability": "stable"
+}

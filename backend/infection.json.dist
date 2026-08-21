@@ -1,0 +1,21 @@
+{
+    "$schema": "https://raw.githubusercontent.com/infection/infection/0.29.14/resources/schema.json",
+    "source": {
+        "directories": [
+            "src"
+        ]
+    },
+    "timeout": 15,
+    "logs": {
+        "text": "build/logs/infection.log",
+        "html": "build/logs/infection.html",
+        "summary": "build/logs/infection-summary.log"
+    },
+    "minMsi": 80,
+    "minCoveredMsi": 80,
+    "testFramework": "phpunit",
+    "tmpDir": "/tmp/sstf-infection",
+    "mutators": {
+        "@default": true
+    }
+}
