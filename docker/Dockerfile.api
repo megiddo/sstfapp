@@ -26,6 +26,6 @@ COPY . .
 
 RUN composer dump-autoload --optimize
 
-EXPOSE 8080
+EXPOSE 27180
 
-CMD ["php", "-S", "0.0.0.0:8080", "-t", "public", "public/index.php"]
+CMD ["php", "-S", "0.0.0.0:27180", "-t", "public", "public/index.php"]
