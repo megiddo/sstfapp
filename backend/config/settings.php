@@ -6,6 +6,10 @@ $dataPath = getenv('DATA_PATH') ?: ($_ENV['DATA_PATH'] ?? dirname(__DIR__, 2) . 
 $dataPath = rtrim((string) $dataPath, '/');
 
 $appEnv = (string) ($_ENV['APP_ENV'] ?? getenv('APP_ENV') ?: 'development');
+$sessionSecureRaw = $_ENV['SESSION_SECURE'] ?? getenv('SESSION_SECURE');
+$sessionSecure = ($sessionSecureRaw === false || $sessionSecureRaw === null || $sessionSecureRaw === '')
+    ? ($appEnv === 'production')
+    : filter_var($sessionSecureRaw, FILTER_VALIDATE_BOOLEAN);
 $defaultRateMax = $appEnv === 'testing' ? 10000 : 10;
 $rateMaxRaw = $_ENV['AUTH_RATE_LIMIT_MAX'] ?? getenv('AUTH_RATE_LIMIT_MAX');
 $rateMax = ($rateMaxRaw === false || $rateMaxRaw === null || $rateMaxRaw === '')
@@ -33,7 +37,7 @@ return [
         'secret' => (string) ($_ENV['SESSION_SECRET'] ?? getenv('SESSION_SECRET') ?: ''),
         'path' => (string) ($_ENV['SESSION_PATH'] ?? getenv('SESSION_PATH') ?: $dataPath . '/sessions'),
         'cookie_name' => 'sstf_session',
-        'secure' => ($appEnv === 'production'),
+        'secure' => $sessionSecure,
     ],
     'auth_rate_limit' => [
         'max' => $rateMax,

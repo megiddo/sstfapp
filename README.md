@@ -17,9 +17,10 @@ Single Set to Failure workout tracking app.
 | API | PHP **8.2+** (Docker **8.4**), Slim 4, PHP-DI, PSR-7 |
 | Data | SQLite 3 (WAL, foreign keys). Global file + per-user files (M1+) |
 | Frontend | Node **22**, SvelteKit SPA (`adapter-static`, `ssr = false`) |
-| Dev | Docker Compose: `api` + `web` only |
+| Dev | Docker Compose `docker/compose.dev.yml`: Vite `web` + Slim `api` |
+| Prod | Docker Compose `docker/compose.prod.yml`: nginx SPA + Slim `api` |
 
-## Run with Docker
+## Run with Docker (dev)
 
 ```bash
 cp -n .env.example .env
@@ -31,7 +32,22 @@ docker compose -f docker/compose.dev.yml up --build
 
 Vite proxies `/api` → `http://api:8080` inside Compose (or `http://localhost:8080` on the host). Same-origin from the browser.
 
-`backend/vendor` and `frontend/node_modules` are named volumes so Google Drive does not sync them.
+`backend/vendor` and `frontend/node_modules` are named volumes so Google Drive does not sync them. SQLite is **not** in those volumes: both Compose files bind-mount host `./data` at `/data`, so accounts survive image rebuilds.
+
+## Run with Docker (prod)
+
+Set a real `SESSION_SECRET` in `.env`. Build bakes `PUBLIC_GOOGLE_CLIENT_ID` into the SPA.
+
+```bash
+docker compose -f docker/compose.prod.yml up --build
+```
+
+- App (SPA + `/api` on one origin): [http://localhost](http://localhost) (`WEB_PORT` defaults to 80)
+- API is not published; nginx proxies `/api` to Slim
+
+`APP_ENV=production` sets the session cookie `Secure` flag. For HTTP on localhost, set `SESSION_SECURE=false` in `.env`. Behind TLS, leave it unset.
+
+Do not run the dev and prod stacks against `./data` at the same time.
 
 ## Environment
 
@@ -41,10 +57,11 @@ Copy `.env.example` to `.env`. Compose also sets container values.
 |----------|---------|
 | `APP_ENV` | `development` / `testing` / `production`. Testing disables Slim error logs. Production sets the session cookie `Secure` flag. |
 | `APP_DEBUG` | When true, `JsonErrorHandler` may include exception messages. |
-| `DATA_PATH` | Directory for `global.sqlite` and `users/*.sqlite`. Compose uses `/data`. |
+| `DATA_PATH` | Directory for `global.sqlite` and `users/*.sqlite`. Both Compose files set this to `/data` and bind-mount host `./data`. |
 | `GOOGLE_CLIENT_ID` | Google Identity Services / OAuth client ID. Used to verify ID token `aud`. |
-| `PUBLIC_GOOGLE_CLIENT_ID` | Same value for the SvelteKit login button (Vite public env). |
-| `SESSION_SECRET` | HMAC key for the HttpOnly `sstf_session` cookie. Use a long random string in production. |
+| `PUBLIC_GOOGLE_CLIENT_ID` | Same value for the SvelteKit login button (Vite public env; baked in at prod image build). |
+| `SESSION_SECRET` | HMAC key for the HttpOnly `sstf_session` cookie. Use a long random string in production. Required by `compose.prod.yml`. |
+| `SESSION_SECURE` | Cookie `Secure` flag. Unset: true when `APP_ENV=production`. Set `false` for HTTP localhost. |
 | `AUTH_RATE_LIMIT_MAX` | Max `/api/auth/*` requests per IP per window. Defaults to 10 (10000 when `APP_ENV=testing`). |
 | `AUTH_RATE_LIMIT_WINDOW` | Rate-limit window in seconds. Default 60. |
 
@@ -113,11 +130,13 @@ The login page loads `https://accounts.google.com` for the official button. Keep
 
 ## Production (SPA + API, same origin)
 
+Preferred: `docker compose -f docker/compose.prod.yml up --build`. nginx serves the built SPA and proxies `/api` to Slim. Host `./data` is the SQLite directory.
+
+Without Compose:
+
 1. `docker compose -f docker/compose.dev.yml exec -T web npm run build` (or Node 22 locally in `frontend/`).
 2. Copy `frontend/build/` to `backend/public/spa/`.
 3. Serve `/api` with PHP (php-fpm or the built-in server) and `/` from `public/spa` (nginx `try_files` → `index.html` for client routes).
-
-Dev does not need nginx: Vite is the SPA and proxies `/api`. A full nginx image is deferred until deploy.
 
 ## PHP / Node without Docker
 

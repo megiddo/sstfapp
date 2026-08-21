@@ -1,0 +1,51 @@
+name: sstf-prod
+
+# Production stack. SQLite and sessions live on the host at ../data
+# (bind-mounted at /data), same folder as compose.dev.yml, so rebuilds
+# do not wipe accounts. Do not run this stack and the dev stack against
+# the same files at the same time.
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api.prod
+    env_file:
+      - ../.env
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      DATA_PATH: /data
+      SESSION_PATH: /data/sessions
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    volumes:
+      - ../data:/data
+    restart: unless-stopped
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "php", "/app/scripts/healthcheck.php"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web.prod
+      args:
+        PUBLIC_GOOGLE_CLIENT_ID: ${PUBLIC_GOOGLE_CLIENT_ID:-${GOOGLE_CLIENT_ID:-}}
+    ports:
+      - "${WEB_PORT:-80}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s

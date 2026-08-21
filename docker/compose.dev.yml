@@ -1,5 +1,9 @@
 name: sstf
 
+# Dev stack. SQLite and sessions live on the host at ../data (bind-mounted
+# at /data), same folder as compose.prod.yml. Named volumes are only for
+# vendor and node_modules so Google Drive does not sync them.
+
 services:
   api:
     build:
@@ -13,6 +17,7 @@ services:
       APP_ENV: development
       APP_DEBUG: "true"
       DATA_PATH: /data
+      SESSION_PATH: /data/sessions
       SESSION_SECRET: ${SESSION_SECRET:-dev-insecure-session-secret-change-me}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     volumes:
