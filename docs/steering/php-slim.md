@@ -37,8 +37,10 @@ sstfapp/
 │   ├── tests/Integration
 │   └── infection.json.dist     # minMsi 80; tmpDir /tmp/sstf-infection
 ├── frontend/                   # SvelteKit SPA
-├── data/                       # gitignored sqlite files
-└── docker/compose.dev.yml      # api + web only (no MariaDB, no Mailhog)
+├── data/                       # gitignored sqlite files (host bind-mount)
+└── docker/
+    ├── compose.dev.yml         # Vite + Slim; vendor/node_modules named volumes
+    └── compose.prod.yml        # nginx SPA + Slim; same host ./data mount
 ```
 
 ## Conventions
@@ -53,14 +55,14 @@ sstfapp/
 | Routes | `/api/...` (no `/v1` prefix for MVP) |
 | SQLite | WAL, `foreign_keys=ON`, user files `0600`, data dir outside `public/` |
 | User files | Filename allowlist `/^[a-f0-9]{32}$/` on `UserDbFactory` |
-| Session | Server-side file store keyed to `email_hash`; cookie `sstf_session` is `HttpOnly`, `SameSite=Lax`, `Secure` when `APP_ENV=production`. HMAC with `SESSION_SECRET`. Never put raw email in a non-HttpOnly cookie. |
+| Session | Server-side file store keyed to `email_hash`; cookie `sstf_session` is `HttpOnly`, `SameSite=Lax`, `Secure` when `APP_ENV=production` (override with `SESSION_SECURE`). HMAC with `SESSION_SECRET`. Never put raw email in a non-HttpOnly cookie. |
 | Google tokens | Inject `GoogleIdTokenVerifierInterface`. Production verifies RS256 against Google certs (`aud`, `iss`, `exp`). Tests use a fake — never hit the Google network. |
 | CSRF | Same-site cookie + require `Content-Type: application/json` on mutating `/api/auth/*` JSON routes. |
 | Config | `settings.php` reads `$_ENV`; Dotenv loads repo-root or `backend/.env` |
 | Errors | Slim `ErrorMiddleware` + `JsonErrorHandler`; no error logs when `APP_ENV=testing` |
 | Coverage | Gate **`backend/src` only**; config/public/migrations SQL are out of the percentage |
 | Mutation | Infection PCOV in Docker; start with `@default`; do not disable large mutator sets without a documented equivalent-mutant exception |
-| Docker | `docker/compose.dev.yml`: `api`, `web`; vendor and node_modules as named volumes |
+| Docker | `compose.dev.yml` (Vite) and `compose.prod.yml` (nginx). Both bind-mount host `./data` at `/data`. Dev named volumes are only vendor/node_modules. |
 | Frontend | SvelteKit, `adapter-static`, `ssr = false`, Vite proxies `/api` → api |
 
 ## Quality gates (locked)

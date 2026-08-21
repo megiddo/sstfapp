@@ -4,4 +4,5 @@ build
 coverage
 .stryker-tmp
 .env
+reports
 *.log
