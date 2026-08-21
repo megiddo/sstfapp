@@ -29,7 +29,7 @@ Companion docs: [DESIGN.md](./DESIGN.md), [UI.md](./UI.md).
 
 ## Phase 1 — Google login and user repos
 
-**Goal:** A verified Google email creates or opens `data/users/{md5}.sqlite` and a session.
+**Goal:** A verified Google email creates or opens a Google-namespaced user sqlite file and a session.
 
 - [x] Env: `GOOGLE_CLIENT_ID`, session secret, `APP_ENV`
 - [x] `EmailKey`: trim, lowercase, `md5` hex filename
@@ -127,16 +127,17 @@ Companion docs: [DESIGN.md](./DESIGN.md), [UI.md](./UI.md).
 
 ## Phase 6 — Password and multi-login
 
-**Goal:** Email/password maps to the same repo as Google via email.
+**Goal:** Username/password is its own login route; Settings can optionally bind it to a Google repo.
 
-- [x] Set password on `/settings` (`password_hash` Argon2id in user DB, `identities.password`)
-- [x] `POST /api/auth/password` `{ email, password }`
-- [x] Login page: Google **or** email/password
-- [x] Google-first then password, and password-first then Google, both land on one file
+- [x] Set password on `/settings` (`password_hash` Argon2id in user DB, `identities.password`, `login_map` bind)
+- [x] `POST /api/auth/password` `{ username, password }` (sign in only; `email` still accepted)
+- [x] `POST /api/auth/register` `{ username, password, timezone? }` (creates a password-namespaced file)
+- [x] Login page: Google **or** username/password Sign in / Create account
+- [x] Google-first then **Set password** opens the same file; password-first then Google stays two files
 - [x] Rate limit auth routes
 - [x] No password in logs or export filenames
 
-**Exit:** One email, two buttons, one SQLite file, same schedules and logs.
+**Exit:** Google and password can stay separate; linking is opt-in via Set password.
 
 **Progress (M6):** 2026-08-20, branch `sstf-m6`. PHP line coverage **97.99%**; Infection MSI **85%** (covered MSI 87%); Svelte line coverage **97.39%** on `frontend/src/lib`; Stryker **76.62%**.
 

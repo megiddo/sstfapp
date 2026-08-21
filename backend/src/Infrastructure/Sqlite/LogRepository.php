@@ -55,6 +55,24 @@ final class LogRepository
         return $this->mapPrefill($row);
     }
 
+    public function bestForExercise(string $emailHash, int $globalExerciseId): ?LogPrefill
+    {
+        $pdo = $this->users->open($emailHash);
+        $stmt = $pdo->prepare(
+            'SELECT weight, reps
+             FROM logs
+             WHERE global_exercise_id = :global_exercise_id
+             ORDER BY weight DESC, reps DESC, logged_at DESC, id DESC
+             LIMIT 1',
+        );
+        $stmt->execute([
+            'global_exercise_id' => $globalExerciseId,
+        ]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $this->mapPrefill($row);
+    }
+
     public function insert(
         string $emailHash,
         ?int $scheduleId,

@@ -8,7 +8,7 @@ use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Response;
-use Sstf\Api\Domain\EmailKey;
+use Sstf\Api\Domain\RepoKey;
 use Sstf\Api\Domain\ExerciseLog;
 use Sstf\Api\Domain\ExerciseNotOnSetException;
 use Sstf\Api\Domain\InvalidLogException;
@@ -75,14 +75,15 @@ final class WorkoutLogControllerTest extends TestCase
         parent::setUp();
         $this->tmp = sys_get_temp_dir() . '/sstf-wo-ctl-' . getmypid() . '-' . bin2hex(random_bytes(4));
         mkdir($this->tmp . '/users', 0700, true);
-        $this->hash = EmailKey::fromEmail('wo@example.com')->hash();
+        $this->hash = RepoKey::google('wo@example.com')->hash();
         $root = dirname(__DIR__, 4);
         $clock = new FakeClock((new \DateTimeImmutable('2026-08-19 18:40:00', new \DateTimeZone('America/Chicago')))->getTimestamp());
         $users = new UserDbFactory($this->tmp . '/users', new Migrator(), $root . '/migrations/user');
         $global = new GlobalDb($this->tmp . '/global.sqlite', new Migrator(), $root . '/migrations/global');
         $directory = new UserDirectory($users, $global, $clock);
         $directory->provisionGoogleUser(
-            EmailKey::fromEmail('wo@example.com'),
+            $this->hash,
+            'wo@example.com',
             'wo@example.com',
             'sub-wo',
             'America/Chicago',

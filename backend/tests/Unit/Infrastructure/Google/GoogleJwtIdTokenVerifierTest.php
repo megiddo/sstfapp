@@ -200,10 +200,11 @@ final class GoogleJwtIdTokenVerifierTest extends TestCase
         $verifier->verify($this->mint($payload));
     }
 
-    public function testEmptyAudienceRejected(): void
+    public function testEmptyAudienceFailsOnVerifyNotConstruction(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        new GoogleJwtIdTokenVerifier('', $this->certs(), $this->clock);
+        $verifier = new GoogleJwtIdTokenVerifier('', $this->certs(), $this->clock);
+        $this->expectException(InvalidGoogleIdTokenException::class);
+        $verifier->verify($this->mint($this->payload()));
     }
 
     public function testUrlCertsProviderParsesPemMap(): void

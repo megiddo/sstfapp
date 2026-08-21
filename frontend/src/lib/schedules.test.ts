@@ -4,6 +4,7 @@ import {
   archiveSchedule,
   createSchedule,
   createSet,
+  deleteSet,
   listScheduleSets,
   listSchedules,
   moveExercise,
@@ -113,6 +114,13 @@ describe('schedule API helpers', () => {
       return { ok: true, status: 200, json: async () => ({ data: evening }) } as Response;
     });
     await expect(replaceSetExercises(9, [1, 5], put)).resolves.toMatchObject({ ok: true });
+
+    const deleted = vi.fn(async (path: string, init?: RequestInit) => {
+      expect(path).toBe('/api/sets/9');
+      expect(init?.method).toBe('DELETE');
+      return { ok: true, status: 200, json: async () => ({ data: { ok: true } }) } as Response;
+    });
+    await expect(deleteSet(9, deleted)).resolves.toEqual({ ok: true });
   });
 
   it('maps errors and malformed payloads', async () => {
@@ -227,6 +235,17 @@ describe('schedule API helpers', () => {
     await expect(replaceSetExercises(9, [1], jsonResponse(200, { data: { name: 'X' } }))).resolves.toMatchObject({ ok: false });
     await expect(
       replaceSetExercises(9, [1], async () => {
+        throw new Error('offline');
+      }),
+    ).resolves.toMatchObject({ ok: false, status: 0 });
+
+    await expect(deleteSet(9, jsonResponse(200, { data: { ok: false } }))).resolves.toMatchObject({ ok: false });
+    await expect(deleteSet(9, jsonResponse(200, { data: {} }))).resolves.toMatchObject({ ok: false });
+    await expect(deleteSet(9, jsonResponse(404, { error: { code: 'not_found', message: 'Set not found' } }))).resolves.toMatchObject({
+      ok: false,
+    });
+    await expect(
+      deleteSet(9, async () => {
         throw new Error('offline');
       }),
     ).resolves.toMatchObject({ ok: false, status: 0 });

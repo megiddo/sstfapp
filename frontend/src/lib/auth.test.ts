@@ -1,12 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchMe, hasPasswordIdentity, patchMe, signInWithGoogle, signInWithPassword, signOut } from './auth';
+import { fetchMe, hasPasswordIdentity, patchMe, registerWithPassword, signInWithGoogle, signInWithPassword, signOut } from './auth';
 import {
+  AUTH_ERROR_ACCOUNT_EXISTS,
   AUTH_ERROR_EMAIL_UNVERIFIED,
+  AUTH_ERROR_ENTER_PASSWORD,
   AUTH_ERROR_GOOGLE_FAILED,
   AUTH_ERROR_RATE_LIMITED,
+  AUTH_ERROR_REGISTER_FAILED,
   AUTH_ERROR_SIGN_IN_FAILED,
   messageForAuthCode,
   messageForPasswordCode,
+  messageForRegisterCode,
 } from './authErrors';
 import {
   isLoginPath,
@@ -44,6 +48,17 @@ describe('authErrors', () => {
     expect(messageForPasswordCode(undefined)).toBe('Sign-in failed');
     expect(messageForPasswordCode('other')).toBe('Sign-in failed');
     expect(messageForPasswordCode('rate_limited')).not.toBe('Sign-in failed');
+  });
+
+  it('maps register codes without leaking credentials', () => {
+    expect(messageForRegisterCode('account_exists')).toBe(AUTH_ERROR_ACCOUNT_EXISTS);
+    expect(messageForRegisterCode('account_exists')).toBe('Account already exists');
+    expect(messageForRegisterCode('invalid_password')).toBe(AUTH_ERROR_ENTER_PASSWORD);
+    expect(messageForRegisterCode('invalid_password')).toBe('Enter a password');
+    expect(messageForRegisterCode('rate_limited')).toBe(AUTH_ERROR_RATE_LIMITED);
+    expect(messageForRegisterCode(undefined)).toBe(AUTH_ERROR_REGISTER_FAILED);
+    expect(messageForRegisterCode('other')).toBe('Registration failed');
+    expect(messageForRegisterCode('account_exists')).not.toBe('Registration failed');
   });
 });
 
@@ -342,12 +357,12 @@ describe('auth client', () => {
     });
   });
 
-  it('signInWithPassword posts email and password', async () => {
+  it('signInWithPassword posts username and password', async () => {
     const fetcher = vi.fn(async (path: string, init?: RequestInit) => {
       expect(path).toBe('/api/auth/password');
       expect(init?.method).toBe('POST');
       expect(init?.credentials).toBe('include');
-      expect(init?.body).toBe(JSON.stringify({ email: 'a@b.com', password: 'secret' }));
+      expect(init?.body).toBe(JSON.stringify({ username: 'a@b.com', password: 'secret' }));
       return {
         ok: true,
         status: 200,
@@ -418,6 +433,111 @@ describe('auth client', () => {
       ok: false,
       code: 'invalid_credentials',
       message: 'Sign-in failed',
+    });
+  });
+
+  it('registerWithPassword posts username, password, and timezone', async () => {
+    const fetcher = vi.fn(async (path: string, init?: RequestInit) => {
+      expect(path).toBe('/api/auth/register');
+      expect(init?.method).toBe('POST');
+      expect(init?.credentials).toBe('include');
+      expect(init?.body).toBe(
+        JSON.stringify({ username: 'new@b.com', password: 'secret', timezone: 'America/Chicago' }),
+      );
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: {
+            email: 'new@b.com',
+            timezone: 'America/Chicago',
+            weight_unit: 'lb',
+            identities: [{ provider: 'password' }],
+          },
+        }),
+      } as Response;
+    });
+
+    await expect(registerWithPassword('new@b.com', 'secret', 'America/Chicago', fetcher)).resolves.toEqual({
+      ok: true,
+      me: {
+        email: 'new@b.com',
+        timezone: 'America/Chicago',
+        weight_unit: 'lb',
+        identities: [{ provider: 'password' }],
+      },
+    });
+  });
+
+  it('registerWithPassword maps exists, password, rate limit, and malformed failures', async () => {
+    const exists = async () =>
+      ({
+        ok: false,
+        status: 409,
+        json: async () => ({ error: { code: 'account_exists', message: 'Account already exists' } }),
+      }) as Response;
+    await expect(registerWithPassword('a@b.com', 'secret', 'UTC', exists)).resolves.toEqual({
+      ok: false,
+      code: 'account_exists',
+      message: 'Account already exists',
+    });
+
+    const empty = async () =>
+      ({
+        ok: false,
+        status: 400,
+        json: async () => ({ error: { code: 'invalid_password', message: 'Enter a password' } }),
+      }) as Response;
+    await expect(registerWithPassword('a@b.com', '', 'UTC', empty)).resolves.toEqual({
+      ok: false,
+      code: 'invalid_password',
+      message: 'Enter a password',
+    });
+
+    const limited = async () =>
+      ({
+        ok: false,
+        status: 429,
+        json: async () => ({ error: { code: 'rate_limited', message: 'Too many attempts' } }),
+      }) as Response;
+    await expect(registerWithPassword('a@b.com', 'secret', 'UTC', limited)).resolves.toEqual({
+      ok: false,
+      code: 'rate_limited',
+      message: 'Too many attempts',
+    });
+
+    const noEnvelope = async () =>
+      ({
+        ok: false,
+        status: 400,
+        json: async () => ({}),
+      }) as Response;
+    await expect(registerWithPassword('a@b.com', 'secret', 'UTC', noEnvelope)).resolves.toEqual({
+      ok: false,
+      code: 'invalid_request',
+      message: 'Registration failed',
+    });
+
+    const weird = async () =>
+      ({
+        ok: true,
+        status: 200,
+        json: async () => ({ data: {} }),
+      }) as Response;
+    await expect(registerWithPassword('a@b.com', 'secret', 'UTC', weird)).resolves.toEqual({
+      ok: false,
+      code: 'invalid_request',
+      message: 'Registration failed',
+    });
+
+    await expect(
+      registerWithPassword('a@b.com', 'secret', 'UTC', async () => {
+        throw new Error('offline');
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      code: 'invalid_request',
+      message: 'Registration failed',
     });
   });
 

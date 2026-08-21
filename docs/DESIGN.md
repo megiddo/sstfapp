@@ -16,7 +16,7 @@ Opening the app:
 
 1. Load the active schedule.
 2. Select the set whose start day/time is closest to now (user timezone).
-3. Show that set. Prefill each exercise with the last logged weight and reps for that exercise in that set.
+3. Show that set. Prefill each exercise with the last logged weight and reps for that exercise in that set. Also show the best (heaviest, then most reps) for that exercise.
 4. The user may switch to a different set in the active schedule.
 5. Saving weight + reps writes an immutable **log** row (schedule, set, exercise, weight, reps, timestamp).
 
@@ -25,11 +25,10 @@ Opening the app:
 | Layer | Choice | Notes |
 | --- | --- | --- |
 | API | Slim 4, PHP 8.2+ | JSON REST under `/api`. Composer autoload, PSR-7/PSR-15. |
-| User data | One SQLite 3 file per user | Filename = `md5(normalized email)`. Includes identity + all user records. Trivial to copy, back up, or export. |
-| Shared data | One global SQLite 3 file | Exercise catalog, schema version, optional user index (email hash only). |
+| User data | One SQLite 3 file per user | Filename = `md5(provider\|normalized login)`. Includes identity + all user records. Trivial to copy, back up, or export. |
+| Shared data | One global SQLite 3 file | Exercise catalog, schema version, login map, optional user index (repo hash only). |
 | Frontend | SvelteKit, `adapter-static`, `ssr = false` | SPA / “serverless” mode. `fallback: 'index.html'` for client routing. |
-| Auth phase 1 | Google Identity Services → ID token | Backend verifies token, provisions or opens the user DB, sets a session cookie. |
-| Auth later | Email + password | Same email → same user file. Password hash lives in the user DB, not globally. |
+| Auth | Google Identity Services **or** username/password | Separate routes. Linking the same repo is optional (Settings → Set password on a Google account). |
 
 Recommended layout:
 
@@ -51,32 +50,39 @@ Serve the built SPA and `/api` from the same origin (nginx or Slim `public/`). S
 
 ## 3. Identity and repositories
 
-### 3.1 Email is the account key
+### 3.1 Provider-namespaced repo keys
 
-Every login method must produce a verified email. Normalize as `strtolower(trim(email))`. The user repository path is:
+Google and username/password are **independent login routes**. The same string used as a Google email and as a password username does **not** open the same file unless the user opts in.
+
+Normalize logins with trim + lowercase. Filenames:
 
 ```
-data/users/{md5(normalized_email)}.sqlite
+data/users/{md5('google|' + normalized_email)}.sqlite
+data/users/{md5('password|' + normalized_username)}.sqlite
 ```
 
-MD5 here is a **stable filesystem key**, not a password hash. Passwords use `password_hash()` with `PASSWORD_ARGON2ID`. The filename is deterministic on purpose: login, migration, and export do not need a server-side pepper.
+MD5 here is a **stable filesystem key**, not a password hash. Passwords use `password_hash()` with `PASSWORD_ARGON2ID`.
 
-Treat email as immutable. Changing email would rename the file; that is out of scope.
+Username rules: 1–64 characters after normalize; `a-z`, `0-9`, `. _ @ + -`. Emails are valid usernames. Gmail dot-aliases are different accounts unless Google returns a canonical address.
 
-Gmail dot-aliases (`n.smith@gmail.com` vs `nsmith@gmail.com`) are different accounts unless Google returns a canonical address. Do not add extra alias folding in phase 1.
+Global `login_map` stores `(provider, login_key) → repo_hash`. Password sign-in looks up that map only — it never guesses a filename.
 
 ### 3.2 Provisioning
 
 On successful Google sign-in:
 
 1. Verify the ID token (`aud`, `iss`, `exp`, `email_verified === true`).
-2. Compute the MD5 path.
+2. Look up `login_map` for `google` + normalized email; otherwise use `md5('google|' + email)`.
 3. If the file does not exist, create it, run user migrations, insert `account` + `identities` (provider `google`, subject = Google `sub`).
 4. If it exists, ensure a `google` identity row is present (link).
-5. Optionally upsert `user_index` in the global DB (`email_hash`, `created_at`) so ops does not have to scan the directory.
-6. Create a server-side session keyed to `email_hash`. Never put the raw email in a non-HttpOnly cookie.
+5. Bind `login_map` and optionally upsert `user_index` (`email_hash` column holds the repo hash).
+6. Create a server-side session keyed to that repo hash. Never put the raw email in a non-HttpOnly cookie.
 
-Password login (later phase) hashes the typed email the same way, opens that file, and verifies `password_hash`. Multiple providers on one file is the whole point.
+Password **register** creates a password-namespaced file and a `password` login_map row. Password **sign-in** opens whatever repo that login_key currently maps to.
+
+Optional same repo: a Google session can **Set password** in Settings. That stores Argon2id in the user file and binds `login_map(password, email_normalized)` to **that** Google repo. Later username/password sign-in (username = that email) opens the Google file. If that password username is already bound to a different repo, the bind fails with `account_exists`.
+
+Password-first then Google, or Google-only then password **register** with the same string, stay **two files**.
 
 ### 3.3 What lives where
 
@@ -84,7 +90,8 @@ Password login (later phase) hashes the typed email the same way, opens that fil
 
 - `exercises`
 - `schema_migrations`
-- `user_index` (hash only, no email, no credentials)
+- `login_map` (`provider`, `login_key` → `repo_hash`)
+- `user_index` (repo hash only, no email, no credentials)
 
 **User DB** — everything needed to restore that person:
 
@@ -117,6 +124,14 @@ CREATE UNIQUE INDEX exercises_name ON exercises(name);
 CREATE TABLE user_index (
   email_hash TEXT PRIMARY KEY,
   created_at TEXT NOT NULL
+);
+
+CREATE TABLE login_map (
+  provider TEXT NOT NULL CHECK (provider IN ('google', 'password')),
+  login_key TEXT NOT NULL,
+  repo_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (provider, login_key)
 );
 ```
 
@@ -210,6 +225,8 @@ Last-value prefills:
 2. Else latest log for `global_exercise_id` anywhere.
 3. Else empty weight, reps blank.
 
+Best (display only, does not prefill): heaviest `weight` for that `global_exercise_id`, then highest `reps`. Tie-break later `logged_at`, then higher `id`.
+
 ## 5. Closest-set algorithm
 
 Inputs: active schedule sets, `now` in `account.timezone`.
@@ -230,7 +247,8 @@ All `/api/*` except auth endpoints require a valid session.
 | --- | --- | --- |
 | `POST` | `/api/auth/google` | Body `{ id_token }`. Verify, provision, set cookie. |
 | `POST` | `/api/auth/logout` | Clear session. |
-| `POST` | `/api/auth/password` | Phase 6. |
+| `POST` | `/api/auth/password` | Sign in `{ username, password }` (`email` still accepted). Does not create accounts. |
+| `POST` | `/api/auth/register` | Create a password repo `{ username, password, timezone? }`. Does not merge with Google. |
 | `GET` | `/api/me` | Account, identities, timezone, unit. |
 | `PATCH` | `/api/me` | Timezone, unit, password (current password required if already set). |
 | `GET` | `/api/exercises` | Global catalog, `?q=` search. |
@@ -246,7 +264,7 @@ All `/api/*` except auth endpoints require a valid session.
 | `PATCH` | `/api/sets/:id` | Name, day, time, order. |
 | `DELETE` | `/api/sets/:id` | Delete set (logs remain). |
 | `PUT` | `/api/sets/:id/exercises` | Replace ordered denormalized list. |
-| `GET` | `/api/workout/current` | Active schedule + closest set + last values. `?set_id=` override. |
+| `GET` | `/api/workout/current` | Active schedule + closest set + last and best values. `?set_id=` override. |
 | `GET` | `/api/workout/sets` | Active schedule sets for the switcher. |
 | `POST` | `/api/logs` | One exercise: `{ set_id, global_exercise_id, weight, reps, notes? }`. |
 | `GET` | `/api/logs` | History, filters `from`, `to`, `exercise_id`. |
@@ -266,14 +284,16 @@ backend/src/
   Http/Controllers/ScheduleController.php
   ...
   Domain/ClosestSet.php
-  Domain/EmailKey.php          // normalize + md5
+  Domain/EmailKey.php          // Google email normalize
+  Domain/UsernameKey.php       // password login normalize
+  Domain/RepoKey.php           // provider-namespaced md5 filenames
   Infrastructure/Sqlite/GlobalDb.php
   Infrastructure/Sqlite/UserDbFactory.php
   Infrastructure/Sqlite/Migrator.php
   Infrastructure/GoogleIdToken.php
 ```
 
-`UserDbFactory` accepts a normalized email, resolves the path, opens PDO SQLite with `PRAGMA foreign_keys = ON`, and runs pending user migrations. Refuse any path that is not 32 lowercase hex chars.
+`UserDbFactory` accepts a 32-hex repo hash, opens PDO SQLite with `PRAGMA foreign_keys = ON`, and runs pending user migrations. Refuse any path that is not 32 lowercase hex chars.
 
 Migrations are numbered SQL files, applied in a transaction, recorded in `schema_migrations`.
 

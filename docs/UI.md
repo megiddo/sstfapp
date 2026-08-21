@@ -62,9 +62,10 @@ Workout is the default after login. Deep-link `/` with `?set=` after a manual sw
 ### 4.1 Login
 
 - App name: **SSTF** with subtitle “Single set to failure.”
-- **Continue with Google** or email/password. Both methods use the same email and open the same user file.
-- Inputs are 16px on a phone column. Official Google button (not One Tap).
-- Error: “Google sign-in failed” / “Email not verified” / “Sign-in failed” / “Too many attempts” — no stack traces.
+- **Continue with Google** (registers or signs in) or username/password **Sign in** / **Create account**. No instructional blurb — the controls are the copy.
+- Inputs are 16px on a phone column. Official Google button (not One Tap). Password registration asks for confirm password.
+- If Google is not configured, the password form still works.
+- Error: “Google sign-in failed” / “Email not verified” / “Sign-in failed” / “Too many attempts” / “Account already exists” / “Registration failed” / “Passwords do not match” / “Enter a password” — no stack traces.
 
 ### 4.2 Workout (home) — primary
 
@@ -82,6 +83,7 @@ Each **exercise card** (stacked for a 390px thumb, not a dense table row):
 ```
 Bench Press                    Chest
 Last 185 × 8
+Best 225 × 5
 
 [  −  ]  185 lb  [  +  ]     [  −  ]  8  [  +  ]
               Log
@@ -91,7 +93,8 @@ Last 185 × 8
 | --- | --- |
 | Name | Denormalized name, one line, truncate |
 | Meta | Muscle group, optional equipment |
-| Last | `Last 185 × 8` (or `No history`) |
+| Last | `Last 185 × 8` (or `No history`). Prefills the fields. |
+| Best | `Best 225 × 5` — heaviest logged weight for that exercise, then highest reps. Hidden when there is no history. |
 | Weight field | Full half-width; stepper ± (2.5 lb / 1.25 kg). Prefills last weight. `inputMode="decimal"` |
 | Reps field | Full half-width; stepper ±1. Prefills last reps. `inputMode="numeric"` |
 | Log button | **Full-width** under the fields. Disabled while request in flight |
@@ -140,17 +143,18 @@ Set row:
 - Name (tap to edit; large field)
 - Start time (15-minute sheet — 48px rows; snaps `start_minutes` in the UI)
 - Exercise count
+- **Remove** (confirm; logs stay)
 - Tap the row → **set exercise editor** as a **full-screen push** with a back chevron. No side panel.
 
 **Set exercise editor:**
 
 - Header: back, set name, day, time
 - Search the global catalog (`GET /api/exercises?q=`), results as tappable rows
+- If the typed name is not an exact catalog match, **Add {name}** (or submit search) → `POST /api/exercises` then add to the set
 - Recent / frequent from the user’s logs above the catalog search
 - Add appends a denormalized row
 - Reorder with **up/down** buttons (48px). Drag is optional later, never the only path
 - Remove from this set (does not delete global exercise or logs)
-- **Add new exercise** if search misses: name, muscle group, equipment → `POST /api/exercises` then add to set
 
 Save reorder on each up/down so a backgrounded phone cannot lose the list.
 
@@ -181,6 +185,12 @@ Given a new Google account with verified email
 When they complete GIS  
 Then a user SQLite file is created, session starts, and Workout shows the empty onboarding state.
 
+### F1b — First username/password registration
+
+Given a new username that has no password login  
+When they tap **Create account**, enter username + password + confirm, and submit  
+Then a password-namespaced user SQLite file is created, session starts, and Workout shows the empty onboarding state. Later **Sign in** with the same username/password opens that file. The same string as a Google email does not merge unless they later set a password on the Google account.
+
 ### F2 — Build a week
 
 Given an empty account  
@@ -191,7 +201,7 @@ Then that schedule is active and the set has two denormalized exercises.
 
 Given the active schedule has Wed 18:00 Evening and Thu 07:00 Morning  
 When it is Wednesday 18:40 in the user’s timezone  
-Then Workout shows Evening, fields prefilled from the last Evening log for each exercise (or last-ever if none for that set).
+Then Workout shows Evening, fields prefilled from the last Evening log for each exercise (or last-ever if none for that set). The card also shows Best for that exercise (heaviest weight, then most reps).
 
 ### F4 — Log one exercise
 
@@ -205,10 +215,10 @@ Given F3
 When they open Change and pick Thursday Morning  
 Then Workout shows Morning without changing the active schedule.
 
-### F6 — Second login method (phase 6)
+### F6 — Optional second login on a Google repo
 
-Given Google already provisioned `md5(email).sqlite`  
-When they set a password and later sign in with email/password  
+Given Google already provisioned a Google-namespaced sqlite file  
+When they set a password in Settings and later sign in with that email as username + password  
 Then the same file opens; history and schedules are unchanged.
 
 ## 6. Component inventory (frontend)
@@ -251,12 +261,13 @@ Hard requirements for MVP (not polish):
 | Set empty | Add exercises to this set. |
 | No last log | No history |
 | Last log | Last {weight} × {reps} |
+| Best log | Best {weight} × {reps} |
 | Switcher mark | Now |
 | Log success | Logged |
 | Export | Download my data |
 | Units | Pounds (lb) / Kilograms (kg) |
 
-Do not use “failure” in button labels. The product name already says it. Buttons: **Log**, **Change**, **Add set**, **Add exercise**.
+Do not use “failure” in button labels. The product name already says it. Buttons: **Log**, **Change**, **Add set**, **Remove set**, **Add exercise**.
 
 ## 9. Non-goals for UI (MVP)
 

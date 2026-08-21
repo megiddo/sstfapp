@@ -39,9 +39,7 @@
   let recent: Exercise[] = $state([]);
   let frequent: Exercise[] = $state([]);
   let error = $state('');
-  let newName = $state('');
-  let newMuscle = $state('');
-  let newEquipment = $state('');
+  let adding = $state(false);
 
   $effect(() => {
     void scheduleId;
@@ -134,20 +132,22 @@
     await persist(removeExerciseAt(idsFrom(current.exercises), index));
   }
 
-  async function handleCreateExercise() {
-    const created = await addCatalogExercise({
-      name: newName,
-      muscle_group: newMuscle === '' ? null : newMuscle,
-      equipment: newEquipment === '' ? null : newEquipment,
-    });
-    if (!created.ok) {
-      error = created.message;
+  async function handleAddTyped(name: string) {
+    if (adding) {
       return;
     }
-    newName = '';
-    newMuscle = '';
-    newEquipment = '';
-    await handlePick(created.exercise);
+    adding = true;
+    try {
+      const created = await addCatalogExercise({ name });
+      if (!created.ok) {
+        error = created.message;
+        return;
+      }
+      query = '';
+      await handlePick(created.exercise);
+    } finally {
+      adding = false;
+    }
   }
 </script>
 
@@ -207,30 +207,13 @@
     <SuggestedExercises {recent} {frequent} onPick={(exercise) => void handlePick(exercise)} />
   {/if}
 
-  <ExerciseSearch {query} {results} onQuery={(value) => (query = value)} onPick={(exercise) => void handlePick(exercise)} />
-
-  <form
-    class="create"
-    onsubmit={(event) => {
-      event.preventDefault();
-      void handleCreateExercise();
-    }}
-  >
-    <p class="hint">Add new exercise</p>
-    <label>
-      Name
-      <input bind:value={newName} required />
-    </label>
-    <label>
-      Muscle group
-      <input bind:value={newMuscle} />
-    </label>
-    <label>
-      Equipment
-      <input bind:value={newEquipment} />
-    </label>
-    <button type="submit">Add new exercise</button>
-  </form>
+  <ExerciseSearch
+    {query}
+    {results}
+    onQuery={(value) => (query = value)}
+    onPick={(exercise) => void handlePick(exercise)}
+    onAdd={(name) => void handleAddTyped(name)}
+  />
 </PhoneShell>
 
 <style>
@@ -289,38 +272,5 @@
   .controls button:disabled {
     opacity: 0.4;
     cursor: default;
-  }
-
-  .create {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-    margin: 1.25rem 0 2rem;
-  }
-
-  label {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    color: #a3a3a3;
-  }
-
-  input {
-    min-height: 48px;
-    border: 1px solid #333;
-    border-radius: 10px;
-    background: #1c1c1c;
-    color: #f5f5f5;
-    padding: 0 0.85rem;
-  }
-
-  button[type='submit'] {
-    min-height: 48px;
-    border: 0;
-    border-radius: 10px;
-    background: #e8a04a;
-    color: #121212;
-    font-weight: 600;
-    cursor: pointer;
   }
 </style>

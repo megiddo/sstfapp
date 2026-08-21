@@ -87,8 +87,12 @@ final class JsonLoggerTest extends TestCase
 
     public function testStderrFactoryReturnsLogger(): void
     {
-        $logger = JsonLogger::stderr(false);
-        $logger->info('noop');
-        $this->assertInstanceOf(JsonLogger::class, $logger);
+        $disabled = JsonLogger::stderr(false);
+        $disabled->info('noop');
+        $this->assertInstanceOf(JsonLogger::class, $disabled);
+
+        $enabled = JsonLogger::stderr(true);
+        $enabled->info('http.request', ['path' => '/api/health', 'status' => 200]);
+        $this->assertInstanceOf(JsonLogger::class, $enabled);
     }
 }

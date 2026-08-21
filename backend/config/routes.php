@@ -27,6 +27,8 @@ return static function (App $app): void {
         ->add($json);
     $app->post('/api/auth/password', [AuthController::class, 'password'])
         ->add($json);
+    $app->post('/api/auth/register', [AuthController::class, 'register'])
+        ->add($json);
     $app->post('/api/auth/logout', [AuthController::class, 'logout'])
         ->add($json);
 

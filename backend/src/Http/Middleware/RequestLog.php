@@ -9,6 +9,7 @@ use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\MiddlewareInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 use Sstf\Api\Infrastructure\Log\JsonLogger;
+use Throwable;
 
 final class RequestLog implements MiddlewareInterface
 {
@@ -36,7 +37,11 @@ final class RequestLog implements MiddlewareInterface
             $context['email_hash'] = $hash;
         }
 
-        $this->logger->info('http.request', $context);
+        try {
+            $this->logger->info('http.request', $context);
+        } catch (Throwable) {
+            // Logging must not fail the request.
+        }
 
         return $response->withHeader(self::HEADER, $id);
     }

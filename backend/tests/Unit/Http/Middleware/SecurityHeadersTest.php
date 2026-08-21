@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
+use RuntimeException;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Response;
 use Sstf\Api\Http\Middleware\RequestLog;
@@ -131,5 +132,23 @@ final class SecurityHeadersTest extends TestCase
         $payload = json_decode(trim($lines[0]), true, 512, JSON_THROW_ON_ERROR);
         $this->assertArrayNotHasKey('email_hash', $payload);
         $this->assertSame(401, $payload['status']);
+    }
+
+    public function testRequestLogSurvivesLoggerFailure(): void
+    {
+        $mw = new RequestLog(new JsonLogger(true, static function (string $line): void {
+            throw new RuntimeException($line);
+        }));
+        $response = $mw->process(
+            (new ServerRequestFactory())->createServerRequest('GET', '/api/health'),
+            new class implements RequestHandlerInterface {
+                public function handle(ServerRequestInterface $request): ResponseInterface
+                {
+                    return new Response(204);
+                }
+            },
+        );
+        $this->assertSame(204, $response->getStatusCode());
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{16}$/', $response->getHeaderLine(RequestLog::HEADER));
     }
 }

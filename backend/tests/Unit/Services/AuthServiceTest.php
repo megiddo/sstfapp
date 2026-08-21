@@ -6,6 +6,7 @@ namespace Sstf\Api\Tests\Unit\Services;
 
 use PHPUnit\Framework\Attributes\CoversClass;
 use PHPUnit\Framework\TestCase;
+use Sstf\Api\Domain\AccountExistsException;
 use Sstf\Api\Domain\EmailUnverifiedException;
 use Sstf\Api\Domain\InvalidCredentialsException;
 use Sstf\Api\Domain\InvalidCurrentPasswordException;
@@ -13,6 +14,8 @@ use Sstf\Api\Domain\InvalidGoogleIdTokenException;
 use Sstf\Api\Domain\InvalidPasswordException;
 use Sstf\Api\Domain\InvalidTimezoneException;
 use Sstf\Api\Domain\InvalidWeightUnitException;
+use Sstf\Api\Domain\LoginTakenException;
+use Sstf\Api\Domain\RepoKey;
 use Sstf\Api\Domain\SystemClock;
 use Sstf\Api\Domain\UnauthenticatedException;
 use Sstf\Api\Infrastructure\Session\FileSessionStore;
@@ -27,6 +30,8 @@ use Sstf\Api\Tests\Fakes\FakeGoogleIdTokenVerifier;
 
 #[CoversClass(AuthService::class)]
 #[CoversClass(UserDirectory::class)]
+#[CoversClass(AccountExistsException::class)]
+#[CoversClass(LoginTakenException::class)]
 final class AuthServiceTest extends TestCase
 {
     private string $tmp;
@@ -56,7 +61,7 @@ final class AuthServiceTest extends TestCase
         $this->assertSame(['google'], $result['account']->providers);
         $this->assertNotSame('', $result['cookie']);
 
-        $hash = md5('ada@example.com');
+        $hash = RepoKey::google('ada@example.com')->hash();
         $me = $service->me($hash);
         $this->assertSame('Ada@Example.COM', $me->email);
         $this->assertSame('lb', $me->weightUnit);
@@ -103,7 +108,7 @@ final class AuthServiceTest extends TestCase
         $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('me@example.com'));
         $service = $this->service($verifier);
         $service->signInWithGoogle('tok', 'America/Chicago');
-        $hash = md5('me@example.com');
+        $hash = RepoKey::google('me@example.com')->hash();
 
         $tz = $service->updateMe($hash, 'Europe/Paris', null);
         $this->assertSame('Europe/Paris', $tz->timezone);
@@ -128,7 +133,7 @@ final class AuthServiceTest extends TestCase
         $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('bad@example.com'));
         $service = $this->service($verifier);
         $service->signInWithGoogle('tok', 'UTC');
-        $hash = md5('bad@example.com');
+        $hash = RepoKey::google('bad@example.com')->hash();
 
         try {
             $service->updateMe($hash, 'Not/A_Zone', null);
@@ -153,31 +158,34 @@ final class AuthServiceTest extends TestCase
         $service->updateMe('0123456789abcdef0123456789abcdef', 'UTC', 'kg');
     }
 
-    public function testRegisterThenGoogleLinksAndPasswordLogin(): void
+    public function testRegisterThenGoogleCreatesSeparateRepos(): void
     {
         $service = $this->service(new FakeGoogleIdTokenVerifier());
         $created = $service->registerWithPassword('New@Example.COM', 'starter-pass', 'America/Chicago');
         $this->assertSame('New@Example.COM', $created['account']->email);
         $this->assertSame(['password'], $created['account']->providers);
-        $hash = md5('new@example.com');
-        $this->assertFileExists($this->tmp . '/users/' . $hash . '.sqlite');
+        $passwordHash = RepoKey::password('New@Example.COM')->hash();
+        $this->assertFileExists($this->tmp . '/users/' . $passwordHash . '.sqlite');
 
-        $pdo = new \PDO('sqlite:' . $this->tmp . '/users/' . $hash . '.sqlite');
+        $pdo = new \PDO('sqlite:' . $this->tmp . '/users/' . $passwordHash . '.sqlite');
         $stored = $pdo->query('SELECT password_hash FROM account WHERE id = 1')->fetchColumn();
         $this->assertIsString($stored);
         $this->assertSame(PASSWORD_ARGON2ID, password_get_info($stored)['algo']);
 
         $login = $service->signInWithPassword(' new@example.com ', 'starter-pass');
         $this->assertSame('New@Example.COM', $login['account']->email);
+        $this->assertSame(['password'], $login['account']->providers);
 
         $verifier = new FakeGoogleIdTokenVerifier();
         $verifier->willVerify('g', FakeGoogleIdTokenVerifier::user('New@Example.COM', true, 'sub-n'));
-        $linked = $this->service($verifier);
-        $google = $linked->signInWithGoogle('g', 'Europe/Paris');
-        $this->assertContains('google', $google['account']->providers);
-        $this->assertContains('password', $google['account']->providers);
-        $this->assertSame('America/Chicago', $google['account']->timezone);
-        $this->assertCount(1, glob($this->tmp . '/users/*.sqlite') ?: []);
+        $googleService = $this->service($verifier);
+        $google = $googleService->signInWithGoogle('g', 'Europe/Paris');
+        $this->assertSame(['google'], $google['account']->providers);
+        $this->assertSame('Europe/Paris', $google['account']->timezone);
+        $googleHash = RepoKey::google('New@Example.COM')->hash();
+        $this->assertFileExists($this->tmp . '/users/' . $googleHash . '.sqlite');
+        $this->assertNotSame($passwordHash, $googleHash);
+        $this->assertCount(2, glob($this->tmp . '/users/*.sqlite') ?: []);
     }
 
     public function testPasswordLoginRejectsUnknownWrongAndInvalidEmail(): void
@@ -198,8 +206,8 @@ final class AuthServiceTest extends TestCase
         }
 
         try {
-            $service->signInWithPassword('nope', 'right-pass');
-            $this->fail('invalid email');
+            $service->signInWithPassword('nope!', 'right-pass');
+            $this->fail('invalid username');
         } catch (InvalidCredentialsException) {
         }
 
@@ -217,13 +225,13 @@ final class AuthServiceTest extends TestCase
         }
 
         try {
-            $service->registerWithPassword('nope', 'secret', null);
-            $this->fail('invalid email');
+            $service->registerWithPassword('nope!', 'secret', null);
+            $this->fail('invalid username');
         } catch (InvalidCredentialsException) {
         }
 
         $service->registerWithPassword('dup@example.com', 'secret', null);
-        $this->expectException(InvalidCredentialsException::class);
+        $this->expectException(AccountExistsException::class);
         $service->registerWithPassword('dup@example.com', 'other', null);
     }
 
@@ -233,7 +241,7 @@ final class AuthServiceTest extends TestCase
         $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('pw@example.com'));
         $service = $this->service($verifier);
         $service->signInWithGoogle('tok', 'UTC');
-        $hash = md5('pw@example.com');
+        $hash = RepoKey::google('pw@example.com')->hash();
 
         $set = $service->updateMe($hash, null, null, 'first-pass', null);
         $this->assertContains('password', $set->providers);
@@ -269,6 +277,21 @@ final class AuthServiceTest extends TestCase
         $this->assertSame('pw@example.com', $login['account']->email);
     }
 
+    public function testSetPasswordOnGoogleFailsWhenPasswordUsernameIsTaken(): void
+    {
+        $service = $this->service(new FakeGoogleIdTokenVerifier());
+        $service->registerWithPassword('taken@example.com', 'pass-one', null);
+
+        $verifier = new FakeGoogleIdTokenVerifier();
+        $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('taken@example.com'));
+        $googleService = $this->service($verifier);
+        $googleService->signInWithGoogle('tok', 'UTC');
+        $hash = RepoKey::google('taken@example.com')->hash();
+
+        $this->expectException(AccountExistsException::class);
+        $googleService->updateMe($hash, null, null, 'pass-two', null);
+    }
+
     public function testGoogleOnlyPasswordLoginFails(): void
     {
         $verifier = new FakeGoogleIdTokenVerifier();
@@ -296,12 +319,11 @@ final class AuthServiceTest extends TestCase
 
         $service = $this->service($verifier);
         $service->signInWithGoogle('tok', 'UTC');
-        $hash = md5('dir@example.com');
+        $hash = RepoKey::google('dir@example.com')->hash();
         $this->assertTrue($directory->userFileExists($hash));
         $this->assertNull($directory->passwordHash($hash));
 
-        $key = \Sstf\Api\Domain\EmailKey::fromEmail('dir@example.com');
-        $updated = $directory->provisionPasswordUser($key, 'dir@example.com', 'not-a-real-hash', null);
+        $updated = $directory->provisionPasswordUser($hash, 'dir@example.com', 'dir@example.com', 'not-a-real-hash', null);
         $this->assertContains('password', $updated->providers);
         $this->assertContains('google', $updated->providers);
         $this->assertSame('not-a-real-hash', $directory->passwordHash($hash));

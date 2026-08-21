@@ -26,6 +26,8 @@ const evening: WorkoutCurrent = {
       equipment: 'Barbell',
       last_weight: 185,
       last_reps: 8,
+      best_weight: 225,
+      best_reps: 5,
     },
     {
       id: 5,
@@ -35,6 +37,8 @@ const evening: WorkoutCurrent = {
       equipment: 'Barbell',
       last_weight: null,
       last_reps: null,
+      best_weight: null,
+      best_reps: null,
     },
   ],
 };
@@ -78,6 +82,7 @@ describe('WorkoutPage', () => {
     expect(screen.getByText(/Wed · 6:00 PM/)).toBeInTheDocument();
     expect(screen.getByText(/Hypertrophy/)).toBeInTheDocument();
     expect(screen.getByText('Last 185 × 8')).toBeInTheDocument();
+    expect(screen.getByText('Best 225 × 5')).toBeInTheDocument();
     expect(screen.getByText('No history')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Change set' })).toBeInTheDocument();
 

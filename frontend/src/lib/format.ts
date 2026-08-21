@@ -76,6 +76,13 @@ export function formatLastLog(weight: number | null, reps: number | null): strin
   return `Last ${weight} × ${reps}`;
 }
 
+export function formatBestLog(weight: number | null, reps: number | null): string | null {
+  if (weight === null || reps === null) {
+    return null;
+  }
+  return `Best ${weight} × ${reps}`;
+}
+
 export function formatSetSubtitle(dayOfWeek: number, startMinutes: number): string {
   if (!isDayOfWeek(dayOfWeek)) {
     throw new Error('weekday must be 0–6');

@@ -21,7 +21,7 @@ final class JsonLogger
     public static function stderr(bool $enabled): self
     {
         return new self($enabled, static function (string $line): void {
-            fwrite(STDERR, $line);
+            file_put_contents('php://stderr', $line, FILE_APPEND);
         });
     }
 

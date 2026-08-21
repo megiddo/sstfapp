@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Sstf\Api\Infrastructure\Google;
 
-use InvalidArgumentException;
 use Sstf\Api\Domain\ClockInterface;
 use Sstf\Api\Domain\InvalidGoogleIdTokenException;
 use Sstf\Api\Domain\VerifiedGoogleUser;
@@ -21,13 +20,14 @@ final class GoogleJwtIdTokenVerifier implements GoogleIdTokenVerifierInterface
         private readonly GoogleCertsProviderInterface $certs,
         private readonly ClockInterface $clock,
     ) {
-        if ($this->audience === '') {
-            throw new InvalidArgumentException('Google client ID cannot be empty');
-        }
     }
 
     public function verify(string $idToken): VerifiedGoogleUser
     {
+        if ($this->audience === '') {
+            throw new InvalidGoogleIdTokenException();
+        }
+
         if ($idToken === '' || substr_count($idToken, '.') !== 2) {
             throw new InvalidGoogleIdTokenException();
         }

@@ -6,7 +6,7 @@ namespace Sstf\Api\Tests\Integration;
 
 use PDO;
 use PHPUnit\Framework\Attributes\CoversClass;
-use Sstf\Api\Domain\EmailKey;
+use Sstf\Api\Domain\AccountExistsException;
 use Sstf\Api\Domain\InvalidCredentialsException;
 use Sstf\Api\Domain\InvalidCurrentPasswordException;
 use Sstf\Api\Domain\InvalidPasswordException;
@@ -21,6 +21,7 @@ use Sstf\Api\Services\AuthService;
 use Sstf\Api\Tests\Fakes\FakeGoogleIdTokenVerifier;
 use Sstf\Api\Tests\HttpTestCase;
 
+#[CoversClass(AccountExistsException::class)]
 #[CoversClass(AuthController::class)]
 #[CoversClass(MeController::class)]
 #[CoversClass(AuthService::class)]
@@ -101,9 +102,8 @@ final class AuthPasswordTest extends HttpTestCase
         $this->assertSame($email, $this->json($login)['data']['email']);
         $this->assertArrayNotHasKey('password_hash', $this->json($login)['data']);
 
-        $matches = glob($this->dataDir . '/users/' . md5(strtolower($email)) . '.sqlite') ?: [];
-        $this->assertCount(1, $matches);
-        $this->assertSame($path, $matches[0]);
+        $this->assertCount(1, glob($this->dataDir . '/users/*.sqlite') ?: []);
+        $this->assertFileExists($path);
 
         $schedules = $this->json($this->request('GET', '/api/schedules'))['data']['schedules'];
         $this->assertCount(1, $schedules);
@@ -116,7 +116,23 @@ final class AuthPasswordTest extends HttpTestCase
         $this->assertEquals(190, $logs['days'][0]['logs'][0]['weight']);
     }
 
-    public function testPasswordFirstThenGoogleLinksOneFile(): void
+    public function testSetPasswordOnGoogleConflictsWhenPasswordUsernameExists(): void
+    {
+        $email = 'taken-' . bin2hex(random_bytes(4)) . '@example.com';
+        $this->assertSame(200, $this->request('POST', '/api/auth/register', [
+            'username' => $email,
+            'password' => 'password-repo',
+        ])->getStatusCode());
+        $this->request('POST', '/api/auth/logout', []);
+
+        $this->signIn($email);
+        $conflict = $this->request('PATCH', '/api/me', ['password' => 'google-repo']);
+        $this->assertSame(409, $conflict->getStatusCode());
+        $this->assertSame('account_exists', $this->json($conflict)['error']['code']);
+        $this->assertCount(2, glob($this->dataDir . '/users/*.sqlite') ?: []);
+    }
+
+    public function testPasswordFirstThenGoogleCreatesSeparateFiles(): void
     {
         $email = 'pg-' . bin2hex(random_bytes(4)) . '@example.com';
         $container = $this->app->getContainer();
@@ -126,12 +142,11 @@ final class AuthPasswordTest extends HttpTestCase
         $this->assertSame($email, $created['account']->email);
         $this->assertSame(['password'], $created['account']->providers);
 
-        $path = $this->userDbPath($email);
-        $this->assertFileExists($path);
-        $before = glob($this->dataDir . '/users/*.sqlite') ?: [];
-        $this->assertCount(1, $before);
+        $passwordPath = $this->userDbPath($email, 'password');
+        $this->assertFileExists($passwordPath);
+        $this->assertCount(1, glob($this->dataDir . '/users/*.sqlite') ?: []);
 
-        $pdo = new PDO('sqlite:' . $path);
+        $pdo = new PDO('sqlite:' . $passwordPath);
         $hash = $pdo->query('SELECT password_hash FROM account WHERE id = 1')->fetchColumn();
         $this->assertIsString($hash);
         $this->assertSame(PASSWORD_ARGON2ID, password_get_info($hash)['algo']);
@@ -145,25 +160,20 @@ final class AuthPasswordTest extends HttpTestCase
         $this->assertSame(200, $google->getStatusCode());
         $me = $this->json($google)['data'];
         $this->assertSame($email, $me['email']);
-        $this->assertSame('America/Chicago', $me['timezone']);
+        $this->assertSame('Europe/Paris', $me['timezone']);
         $this->assertArrayNotHasKey('password_hash', $me);
+        $this->assertSame(['google'], array_column($me['identities'], 'provider'));
 
-        $providers = [];
-        foreach ($me['identities'] as $identity) {
-            $providers[] = $identity['provider'];
-        }
-        $this->assertContains('password', $providers);
-        $this->assertContains('google', $providers);
+        $googlePath = $this->userDbPath($email);
+        $this->assertFileExists($googlePath);
+        $this->assertNotSame($passwordPath, $googlePath);
+        $this->assertCount(2, glob($this->dataDir . '/users/*.sqlite') ?: []);
 
-        $after = glob($this->dataDir . '/users/*.sqlite') ?: [];
-        $this->assertCount(1, $after);
-        $this->assertSame($path, $after[0]);
-
-        $pdo = new PDO('sqlite:' . $path);
+        $pdo = new PDO('sqlite:' . $googlePath);
         $subject = $pdo->query("SELECT provider_subject FROM identities WHERE provider = 'google'")->fetchColumn();
         $this->assertSame('sub-pg', $subject);
         $passwordRows = (int) $pdo->query("SELECT COUNT(*) FROM identities WHERE provider = 'password'")->fetchColumn();
-        $this->assertSame(1, $passwordRows);
+        $this->assertSame(0, $passwordRows);
     }
 
     public function testUnverifiedGoogleIsStillRejectedAfterPasswordProvision(): void
@@ -182,7 +192,7 @@ final class AuthPasswordTest extends HttpTestCase
         $this->assertSame('email_unverified', $this->json($response)['error']['code']);
         $this->assertSame('Email not verified', $this->json($response)['error']['message']);
 
-        $pdo = new PDO('sqlite:' . $this->userDbPath($email));
+        $pdo = new PDO('sqlite:' . $this->userDbPath($email, 'password'));
         $googleCount = (int) $pdo->query("SELECT COUNT(*) FROM identities WHERE provider = 'google'")->fetchColumn();
         $this->assertSame(0, $googleCount);
     }
@@ -217,6 +227,7 @@ final class AuthPasswordTest extends HttpTestCase
         $this->assertSame($wrongBody['error']['message'], $unknownBody['error']['message']);
         $this->assertSame($wrong->getStatusCode(), $unknown->getStatusCode());
         $this->assertFileDoesNotExist($this->userDbPath($unknownEmail));
+        $this->assertFileDoesNotExist($this->userDbPath($unknownEmail, 'password'));
 
         $googleOnly = 'gonly-' . bin2hex(random_bytes(4)) . '@example.com';
         $this->signIn($googleOnly);
@@ -316,6 +327,7 @@ final class AuthPasswordTest extends HttpTestCase
         $this->assertSame(401, $invalidEmail->getStatusCode());
         $this->assertSame('invalid_credentials', $this->json($invalidEmail)['error']['code']);
         $this->assertSame('Sign-in failed', $this->json($invalidEmail)['error']['message']);
+        $this->assertFileDoesNotExist($this->userDbPath('not-an-email', 'password'));
         $this->assertFileDoesNotExist($this->dataDir . '/users/' . md5('not-an-email') . '.sqlite');
     }
 
@@ -331,9 +343,135 @@ final class AuthPasswordTest extends HttpTestCase
         ]);
         $this->assertCount(1, glob($this->dataDir . '/users/*.sqlite') ?: []);
         $this->assertFileExists($this->userDbPath($email));
-        $this->assertSame(
-            EmailKey::fromEmail($email)->hash(),
-            md5(strtolower(trim($email))),
-        );
+    }
+
+    public function testRegisterEndpointCreatesAccountThenPasswordLoginWorks(): void
+    {
+        $email = 'reg-' . bin2hex(random_bytes(4)) . '@example.com';
+        $created = $this->request('POST', '/api/auth/register', [
+            'email' => $email,
+            'password' => 'first-password',
+            'timezone' => 'America/Chicago',
+        ]);
+        $this->assertSame(200, $created->getStatusCode());
+        $this->assertNotSame('', $created->getHeaderLine('Set-Cookie'));
+        $me = $this->json($created)['data'];
+        $this->assertSame($email, $me['email']);
+        $this->assertSame('America/Chicago', $me['timezone']);
+        $this->assertArrayNotHasKey('password_hash', $me);
+        $this->assertSame(['password'], array_column($me['identities'], 'provider'));
+        $this->assertFileExists($this->userDbPath($email, 'password'));
+        $this->assertStringNotContainsString('first-password', (string) $created->getBody());
+
+        $this->request('POST', '/api/auth/logout', []);
+        $login = $this->request('POST', '/api/auth/password', [
+            'email' => '  ' . strtoupper($email) . '  ',
+            'password' => 'first-password',
+        ]);
+        $this->assertSame(200, $login->getStatusCode());
+        $this->assertSame($email, $this->json($login)['data']['email']);
+        $this->assertCount(1, glob($this->dataDir . '/users/*.sqlite') ?: []);
+    }
+
+    public function testRegisterAcceptsUsernameInsteadOfEmail(): void
+    {
+        $username = 'lifter-' . bin2hex(random_bytes(3));
+        $created = $this->request('POST', '/api/auth/register', [
+            'username' => $username,
+            'password' => 'first-password',
+            'timezone' => 'UTC',
+        ]);
+        $this->assertSame(200, $created->getStatusCode());
+        $this->assertSame($username, $this->json($created)['data']['email']);
+        $this->assertFileExists($this->userDbPath($username, 'password'));
+
+        $this->request('POST', '/api/auth/logout', []);
+        $login = $this->request('POST', '/api/auth/password', [
+            'username' => strtoupper($username),
+            'password' => 'first-password',
+        ]);
+        $this->assertSame(200, $login->getStatusCode());
+        $this->assertSame($username, $this->json($login)['data']['email']);
+    }
+
+    public function testRegisterRejectsDuplicateAndDoesNotCreateUnknownEmails(): void
+    {
+        $email = 'exists-' . bin2hex(random_bytes(4)) . '@example.com';
+        $this->assertSame(200, $this->request('POST', '/api/auth/register', [
+            'email' => $email,
+            'password' => 'keep-this',
+        ])->getStatusCode());
+
+        $dup = $this->request('POST', '/api/auth/register', [
+            'email' => $email,
+            'password' => 'other-pass',
+        ]);
+        $this->assertSame(409, $dup->getStatusCode());
+        $this->assertSame('account_exists', $this->json($dup)['error']['code']);
+        $this->assertSame('Account already exists', $this->json($dup)['error']['message']);
+        $this->assertStringNotContainsString('other-pass', (string) $dup->getBody());
+
+        $googleEmail = 'greg-' . bin2hex(random_bytes(4)) . '@example.com';
+        $this->signIn($googleEmail);
+        $this->request('POST', '/api/auth/logout', []);
+        $googleRegister = $this->request('POST', '/api/auth/register', [
+            'email' => $googleEmail,
+            'password' => 'separate-pass',
+        ]);
+        $this->assertSame(200, $googleRegister->getStatusCode());
+        $this->assertFileExists($this->userDbPath($googleEmail));
+        $this->assertFileExists($this->userDbPath($googleEmail, 'password'));
+        $this->assertNotSame($this->userDbPath($googleEmail), $this->userDbPath($googleEmail, 'password'));
+        $this->assertCount(3, glob($this->dataDir . '/users/*.sqlite') ?: []);
+
+        $noJson = $this->request('POST', '/api/auth/register');
+        $this->assertSame(415, $noJson->getStatusCode());
+
+        $empty = $this->request('POST', '/api/auth/register', ['email' => '', 'password' => 'x']);
+        $this->assertSame(400, $empty->getStatusCode());
+        $this->assertSame('invalid_request', $this->json($empty)['error']['code']);
+        $this->assertSame('Registration failed', $this->json($empty)['error']['message']);
+
+        $blankPassword = $this->request('POST', '/api/auth/register', [
+            'email' => 'a@b.com',
+            'password' => '',
+        ]);
+        $this->assertSame(400, $blankPassword->getStatusCode());
+        $this->assertSame('invalid_password', $this->json($blankPassword)['error']['code']);
+        $this->assertSame('Enter a password', $this->json($blankPassword)['error']['message']);
+
+        $invalidUsername = $this->request('POST', '/api/auth/register', [
+            'email' => 'nope!',
+            'password' => 'secret',
+        ]);
+        $this->assertSame(400, $invalidUsername->getStatusCode());
+        $this->assertSame('invalid_request', $this->json($invalidUsername)['error']['code']);
+        $this->assertSame([], glob($this->dataDir . '/users/' . md5('password|nope!') . '.sqlite') ?: []);
+    }
+
+    public function testRegisterWorksWhenGoogleClientIdIsEmpty(): void
+    {
+        $_ENV['GOOGLE_CLIENT_ID'] = '';
+        putenv('GOOGLE_CLIENT_ID=');
+        $this->app = require dirname(__DIR__, 2) . '/config/bootstrap.php';
+
+        $email = 'local-' . bin2hex(random_bytes(4)) . '@example.com';
+        $created = $this->request('POST', '/api/auth/register', [
+            'email' => $email,
+            'password' => 'local-secret',
+            'timezone' => 'America/Chicago',
+        ]);
+        $this->assertSame(200, $created->getStatusCode());
+        $payload = $this->json($created);
+        $this->assertArrayNotHasKey('error', $payload);
+        $this->assertSame($email, $payload['data']['email']);
+        $this->assertStringNotContainsString('Google client ID', (string) $created->getBody());
+        $this->assertFileExists($this->userDbPath($email, 'password'));
+
+        $google = $this->request('POST', '/api/auth/google', ['id_token' => 'anything']);
+        $this->assertSame(401, $google->getStatusCode());
+        $this->assertSame('invalid_token', $this->json($google)['error']['code']);
+        $this->assertSame('Google sign-in failed', $this->json($google)['error']['message']);
+        $this->assertStringNotContainsString('client ID', (string) $google->getBody());
     }
 }

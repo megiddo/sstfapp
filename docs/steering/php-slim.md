@@ -28,7 +28,7 @@ sstfapp/
 │   ├── config/                 # bootstrap, DI, routes, settings
 │   ├── src/
 │   │   ├── Http/               # JsonResponder, JsonErrorHandler, Controllers, Middleware
-│   │   ├── Domain/             # EmailKey, timezone, Google claims, exceptions
+│   │   ├── Domain/             # EmailKey, UsernameKey, RepoKey, timezone, Google claims, exceptions
 │   │   ├── Services/
 │   │   └── Infrastructure/     # Sqlite, GoogleIdTokenVerifierInterface, file sessions
 │   ├── migrations/global/      # numbered *.sql

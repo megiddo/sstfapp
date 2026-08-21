@@ -341,6 +341,29 @@ export async function patchSet(
   }
 }
 
+export async function deleteSet(
+  id: number,
+  fetcher: typeof fetch = fetch,
+): Promise<{ ok: true } | ApiFail> {
+  try {
+    const { status, body } = await apiFetch(
+      `/api/sets/${id}`,
+      { method: 'DELETE', body: '{}' },
+      fetcher,
+    );
+    if (status !== 200) {
+      return fail(status, body);
+    }
+    const data = parseApiData(body);
+    if (data === null || data.ok !== true) {
+      return fail(status, body);
+    }
+    return { ok: true };
+  } catch {
+    return fail(0, null);
+  }
+}
+
 export async function replaceSetExercises(
   setId: number,
   globalExerciseIds: number[],

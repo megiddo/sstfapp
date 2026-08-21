@@ -7,6 +7,7 @@ import {
   formatHeaderDate,
   formatHeaderWeekday,
   formatHistoryDay,
+  formatBestLog,
   formatLastLog,
   formatLogLine,
   formatMinutes,
@@ -88,6 +89,11 @@ describe('format', () => {
     expect(formatLastLog(null, 8)).toBe('No history');
     expect(formatLastLog(185, 8)).toBe('Last 185 × 8');
     expect(formatLastLog(0, 0)).toBe('Last 0 × 0');
+    expect(formatBestLog(null, null)).toBeNull();
+    expect(formatBestLog(225, null)).toBeNull();
+    expect(formatBestLog(null, 5)).toBeNull();
+    expect(formatBestLog(225, 5)).toBe('Best 225 × 5');
+    expect(formatBestLog(0, 0)).toBe('Best 0 × 0');
     expect(formatSetSubtitle(3, 1080)).toBe('Wed · 6:00 PM');
     expect(formatSetSubtitle(0, 0)).toBe('Sun · 12:00 AM');
     expect(formatSetSubtitle(6, 1439)).toBe('Sat · 11:59 PM');
