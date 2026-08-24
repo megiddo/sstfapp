@@ -32,7 +32,7 @@ describe('LoginPage', () => {
     );
     expect(google).toHaveAttribute('rel', 'external');
     expect(google).toHaveAttribute('data-sveltekit-reload', '');
-    expect(screen.getByTestId('app-version')).toHaveTextContent('v0.1.6');
+    expect(screen.getByTestId('app-version')).toHaveTextContent('v0.1.7');
 
     await revealPassword();
     expect(screen.getByLabelText('Username')).toBeInTheDocument();

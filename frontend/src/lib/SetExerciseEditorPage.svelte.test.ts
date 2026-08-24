@@ -347,11 +347,65 @@ describe('SetExerciseEditorPage', () => {
     expect(screen.getByTestId('copy-set-sheet')).toBeInTheDocument();
     await fireEvent.click(screen.getByRole('button', { name: /Morning/ }));
     expect(screen.getByTestId('confirm-sheet')).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Copy exercises' }));
+    expect(screen.getByRole('dialog', { name: 'Copy' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add Exercises to Set' })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace Set Exercises' }));
     await waitFor(() => {
       expect(saveExercises).toHaveBeenCalledWith(9, [3]);
     });
     expect(screen.getByText('Squat')).toBeInTheDocument();
+  });
+
+  it('appends copied exercises onto the current set', async () => {
+    const morning: TrainingSet = {
+      ...evening,
+      id: 10,
+      name: 'Morning',
+      day_of_week: 1,
+      start_minutes: 420,
+      exercises: [
+        {
+          id: 8,
+          global_exercise_id: 3,
+          name: 'Squat',
+          muscle_group: 'Legs',
+          equipment: 'Barbell',
+          sort_order: 0,
+        },
+      ],
+    };
+    const saveExercises = vi.fn(async (_setId: number, ids: number[]) => ({
+      ok: true as const,
+      set: {
+        ...evening,
+        exercises: ids.map((globalId, index) => ({
+          id: 20 + index,
+          global_exercise_id: globalId,
+          name: globalId === 1 ? 'Bench Press' : globalId === 2 ? 'Barbell Row' : 'Squat',
+          muscle_group: null,
+          equipment: null,
+          sort_order: index,
+        })),
+      },
+    }));
+    render(SetExerciseEditorPage, {
+      props: {
+        scheduleId: 1,
+        setId: 9,
+        loadSets: async () => ({ ok: true as const, sets: [evening, morning] }),
+        saveExercises,
+        searchExercises: async () => ({ ok: true as const, exercises: [] }),
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copy from set' })).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy from set' }));
+    await fireEvent.click(screen.getByRole('button', { name: /Morning/ }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Add Exercises to Set' }));
+    await waitFor(() => {
+      expect(saveExercises).toHaveBeenCalledWith(9, [1, 2, 3]);
+    });
   });
 
   it('copies exercises from a set on another schedule', async () => {
@@ -429,7 +483,7 @@ describe('SetExerciseEditorPage', () => {
     });
     await fireEvent.click(screen.getByRole('button', { name: /Cut evening/ }));
     expect(screen.getByTestId('confirm-sheet')).toBeInTheDocument();
-    await fireEvent.click(screen.getByRole('button', { name: 'Copy exercises' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Replace Set Exercises' }));
     await waitFor(() => {
       expect(saveExercises).toHaveBeenCalledWith(9, [7]);
     });

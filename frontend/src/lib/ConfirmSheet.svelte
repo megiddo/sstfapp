@@ -5,12 +5,16 @@
     confirmLabel,
     onConfirm,
     onCancel,
+    altLabel = '',
+    onAlt,
   }: {
     title: string;
     message: string;
     confirmLabel: string;
     onConfirm: () => void;
     onCancel: () => void;
+    altLabel?: string;
+    onAlt?: () => void;
   } = $props();
 </script>
 
@@ -21,6 +25,9 @@
     <h2>{title}</h2>
     <p>{message}</p>
     <button type="button" class="confirm" onclick={() => onConfirm()}>{confirmLabel}</button>
+    {#if altLabel !== '' && onAlt}
+      <button type="button" class="confirm" onclick={() => onAlt()}>{altLabel}</button>
+    {/if}
     <button type="button" class="cancel" onclick={() => onCancel()}>Cancel</button>
   </div>
 </div>
