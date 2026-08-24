@@ -62,7 +62,7 @@ Workout is the default after login. Deep-link `/` with `?set=` after a manual sw
 ### 4.1 Login
 
 - App name: **SSTF** with subtitle “Single set to failure.”
-- **Continue with Google** (registers or signs in) or username/password **Sign in** / **Create account**. No instructional blurb — the controls are the copy.
+- **Continue with Google** is first (Google G mark + label), then space, then username/password **Sign in** / **Create account**. No instructional blurb — the controls are the copy.
 - Inputs are 16px on a phone column. Continue with Google is a full-page link to Slim (not One Tap, not XHR). Password registration asks for confirm password.
 - If Google is not configured, the password form still works.
 - Error: “Google sign-in failed” / “Email not verified” / “Sign-in failed” / “Too many attempts” / “Account already exists” / “Registration failed” / “Passwords do not match” / “Enter a password” — no stack traces.
@@ -190,7 +190,7 @@ Then a user SQLite file is created, session starts, and Workout shows the empty 
 
 Given a new username that has no password login  
 When they tap **Create account**, enter username + password + confirm, and submit  
-Then a password-namespaced user SQLite file is created, session starts, and Workout shows the empty onboarding state. Later **Sign in** with the same username/password opens that file. The same string as a Google email does not merge unless they later set a password on the Google account.
+Then a user SQLite file is created at `md5(username)`, session starts, and Workout shows the empty onboarding state. Later **Sign in** with the same username/password opens that file. The same string as a Google email opens that same file.
 
 ### F2 — Build a week
 
@@ -218,7 +218,7 @@ Then Workout shows Morning without changing the active schedule.
 
 ### F6 — Optional second login on a Google repo
 
-Given Google already provisioned a Google-namespaced sqlite file  
+Given Google already provisioned a user sqlite file for that email  
 When they set a password in Settings and later sign in with that email as username + password  
 Then the same file opens; history and schedules are unchanged.
 

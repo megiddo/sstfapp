@@ -92,7 +92,7 @@ Copy `.env.example` to `.env`. Compose also sets container values.
 | `AUTH_RATE_LIMIT_MAX` | Max `/api/auth/*` requests per IP per window. Defaults to 10 (10000 when `APP_ENV=testing`). |
 | `AUTH_RATE_LIMIT_WINDOW` | Rate-limit window in seconds. Default 60. |
 
-Sign in or **create an account** with **Google** or **username/password**. They are separate routes and open separate files unless you set a password on a Google account in Settings (that binds password sign-in to the Google repo).
+Sign in or **create an account** with **Google** or **username/password**. The same email opens the same account file. To add a password to a Google-only account, set it in Settings.
 
 Do not commit `.env` or any `*.sqlite` files.
 
@@ -121,7 +121,7 @@ Or `composer smoke` inside the api container. The script writes to a temp `DATA_
 
 ## Backup and restore
 
-Each account is one SQLite file: `data/users/{md5(provider|normalized-login)}.sqlite`. Google uses `google|email`; password register uses `password|username`. MD5 is a stable filename, not a password hash. Logins are lowercased and trimmed first.
+Each account is one SQLite file: `data/users/{md5(normalized-login)}.sqlite`. Google uses the email; password register uses the username. When those strings match, they are the same file. MD5 is a stable filename, not a password hash. Logins are lowercased and trimmed first.
 
 **Backup** — copy the files off the server:
 
@@ -134,7 +134,7 @@ cp data/users/*.sqlite ~/Backups/sstf/
 
 **Restore** — put that file back under the same hash the server uses for that login. A new machine can restore this way and sign in with the same Google email, or the password username bound to that file.
 
-1. Compute the filename, for example `echo -n 'google|you@gmail.com' | md5` (or `md5sum` / `md5 -s`). Password-only accounts use `password|username`.
+1. Compute the filename, for example `echo -n 'you@gmail.com' | md5` (or `md5sum` / `md5 -s`). Password-only accounts use the same hash of the username.
 2. Stop the api process if it has the file open.
 3. Replace the file: `cp sstf-data.sqlite data/users/<hash>.sqlite` (Compose stores these in the `./data` host directory mounted at `/data`).
 4. Sign in with the **same Google email**, or the password username you set on that account (Settings → Set password binds the Google email as a password login). The restored schedules and logs are there.

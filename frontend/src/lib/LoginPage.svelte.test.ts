@@ -16,9 +16,12 @@ describe('LoginPage', () => {
     expect(screen.getByText('Single set to failure.')).toBeInTheDocument();
     const google = screen.getByTestId('google-button');
     expect(google).toHaveTextContent('Continue with Google');
-    expect(google).toHaveAttribute(
-      'href',
-      '/api/auth/google?timezone=' + encodeURIComponent('America/Chicago'),
+    expect(google).toContainElement(screen.getByTestId('google-icon'));
+    expect(google.compareDocumentPosition(screen.getByRole('tablist')) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(google.getAttribute('href')).toMatch(
+      /\/api\/auth\/google\?timezone=America%2FChicago$/,
     );
     expect(google).toHaveAttribute('rel', 'external');
     expect(google).toHaveAttribute('data-sveltekit-reload', '');
@@ -27,7 +30,7 @@ describe('LoginPage', () => {
     expect(screen.getByRole('tab', { name: 'Sign in' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Create account' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
-    expect(screen.getByTestId('app-version')).toHaveTextContent('v0.1.3');
+    expect(screen.getByTestId('app-version')).toHaveTextContent('v0.1.4');
   });
 
   it('lets password registration work alongside Google', async () => {

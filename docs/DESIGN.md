@@ -25,10 +25,10 @@ Opening the app:
 | Layer | Choice | Notes |
 | --- | --- | --- |
 | API | Slim 4, PHP 8.2+ | JSON REST under `/api`. Composer autoload, PSR-7/PSR-15. |
-| User data | One SQLite 3 file per user | Filename = `md5(provider\|normalized login)`. Includes identity + all user records. Trivial to copy, back up, or export. |
+| User data | One SQLite 3 file per user | Filename = `md5(normalized login)` (email for Google; username for password). Includes identity + all user records. Trivial to copy, back up, or export. |
 | Shared data | One global SQLite 3 file | Exercise catalog, schema version, login map, optional user index (repo hash only). |
 | Frontend | SvelteKit, `adapter-static`, `ssr = false` | SPA / “serverless” mode. `fallback: 'index.html'` for client routing. |
-| Auth | Google OAuth 2 (authorization code) **or** username/password | Separate routes. Linking the same repo is optional (Settings → Set password on a Google account). |
+| Auth | Google OAuth 2 (authorization code) **or** username/password | Separate routes. The same email opens the same file. |
 
 Recommended layout:
 
@@ -50,39 +50,41 @@ Serve the built SPA and `/api` from the same origin (nginx or Slim `public/`). S
 
 ## 3. Identity and repositories
 
-### 3.1 Provider-namespaced repo keys
+### 3.1 Email-keyed repo keys
 
-Google and username/password are **independent login routes**. The same string used as a Google email and as a password username does **not** open the same file unless the user opts in.
+Google and username/password are **independent login routes**, but new accounts use the same filename when the login is the same email: `md5(normalized email)`, with no provider prefix.
 
 Normalize logins with trim + lowercase. Filenames:
 
 ```
-data/users/{md5('google|' + normalized_email)}.sqlite
-data/users/{md5('password|' + normalized_username)}.sqlite
+data/users/{md5(normalized_email)}.sqlite
+data/users/{md5(normalized_username)}.sqlite
 ```
+
+A Google email and a password username that normalize to the same string open the **same file**. Non-email usernames still hash the username only (`md5('lifter.one')`, not `md5('password|lifter.one')`).
 
 MD5 here is a **stable filesystem key**, not a password hash. Passwords use `password_hash()` with `PASSWORD_ARGON2ID`.
 
 Username rules: 1–64 characters after normalize; `a-z`, `0-9`, `. _ @ + -`. Emails are valid usernames. Gmail dot-aliases are different accounts unless Google returns a canonical address.
 
-Global `login_map` stores `(provider, login_key) → repo_hash`. Password sign-in looks up that map only — it never guesses a filename.
+Global `login_map` stores `(provider, login_key) → repo_hash`. Password sign-in looks up that map only — it never guesses a filename. Existing mapped accounts keep the hash already stored (so older `google|` / `password|` files keep working). New accounts without a map row use the email-only hash.
 
 ### 3.2 Provisioning
 
 On successful Google sign-in:
 
 1. Exchange the authorization `code` with `league/oauth2-google` and require `email_verified`.
-2. Look up `login_map` for `google` + normalized email; otherwise use `md5('google|' + email)`.
+2. Look up `login_map` for `google` + normalized email; otherwise use `md5(email)`.
 3. If the file does not exist, create it, run user migrations, insert `account` + `identities` (provider `google`, subject = Google `sub`).
-4. If it exists, ensure a `google` identity row is present (link).
+4. If it exists, ensure a `google` identity row is present (link). Do not overwrite timezone.
 5. Bind `login_map` and optionally upsert `user_index` (`email_hash` column holds the repo hash).
 6. Create a server-side session keyed to that repo hash. Never put the raw email in a non-HttpOnly cookie.
 
-Password **register** creates a password-namespaced file and a `password` login_map row. Password **sign-in** opens whatever repo that login_key currently maps to.
+Password **register** creates a file at `md5(username)` and a `password` login_map row, unless that file already exists (Google already provisioned it) — then it fails with `account_exists`. Password **sign-in** opens whatever repo that login_key currently maps to.
 
-Optional same repo: a Google session can **Set password** in Settings. That stores Argon2id in the user file and binds `login_map(password, email_normalized)` to **that** Google repo. Later username/password sign-in (username = that email) opens the Google file. If that password username is already bound to a different repo, the bind fails with `account_exists`.
+Optional second login: a Google session can **Set password** in Settings. That stores Argon2id in the user file and binds `login_map(password, email_normalized)` to that repo. Later username/password sign-in (username = that email) opens the same file. If that password username is already bound to a different repo, the bind fails with `account_exists`.
 
-Password-first then Google, or Google-only then password **register** with the same string, stay **two files**.
+Password-first then Google with the same email opens the **same file** (verified Google email is enough to attach a `google` identity). Google-only then password **register** with that email stays one file and returns `account_exists` — set the password from Settings while signed in.
 
 ### 3.3 What lives where
 
@@ -249,7 +251,7 @@ All `/api/*` except auth endpoints require a valid session.
 | `GET` | `/api/auth/google/callback` | League exchanges `code` on this origin, sets the session cookie, redirects to `APP_URL/` or `APP_URL/login?error=`. |
 | `POST` | `/api/auth/logout` | Clear session. |
 | `POST` | `/api/auth/password` | Sign in `{ username, password }` (`email` still accepted). Does not create accounts. |
-| `POST` | `/api/auth/register` | Create a password repo `{ username, password, timezone? }`. Does not merge with Google. |
+| `POST` | `/api/auth/register` | Create a password repo `{ username, password, timezone? }`. Fails with `account_exists` if that email already has a file. |
 | `GET` | `/api/me` | Account, identities, timezone, unit. |
 | `PATCH` | `/api/me` | Timezone, unit, password (current password required if already set). |
 | `GET` | `/api/exercises` | Global catalog, `?q=` search. |
@@ -287,7 +289,7 @@ backend/src/
   Domain/ClosestSet.php
   Domain/EmailKey.php          // Google email normalize
   Domain/UsernameKey.php       // password login normalize
-  Domain/RepoKey.php           // provider-namespaced md5 filenames
+  Domain/RepoKey.php           // md5(email) / md5(username) filenames
   Infrastructure/Sqlite/GlobalDb.php
   Infrastructure/Sqlite/UserDbFactory.php
   Infrastructure/Sqlite/Migrator.php

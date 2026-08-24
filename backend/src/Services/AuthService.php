@@ -120,6 +120,10 @@ final class AuthService
         }
 
         $repoHash = RepoKey::password($login->normalized())->hash();
+        if ($this->users->userFileExists($repoHash)) {
+            throw new AccountExistsException();
+        }
+
         try {
             $account = $this->users->provisionPasswordUser(
                 $repoHash,

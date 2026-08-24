@@ -410,7 +410,7 @@ final class AuthControllerTest extends TestCase
         );
         $this->assertSame(400, $invalidEmail->getStatusCode());
         $this->assertStringContainsString('invalid_request', (string) $invalidEmail->getBody());
-        $this->assertFileDoesNotExist($this->tmp . '/users/' . md5('password|nope!') . '.sqlite');
+        $this->assertFileDoesNotExist($this->tmp . '/users/' . md5('nope!') . '.sqlite');
 
         $ok = $controller->register(
             $factory->createServerRequest('POST', '/api/auth/register')->withParsedBody([
