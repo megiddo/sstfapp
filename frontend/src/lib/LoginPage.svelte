@@ -3,6 +3,7 @@
   import { AUTH_ERROR_PASSWORD_MISMATCH, messageForAuthCode } from './authErrors';
   import PhoneShell from './PhoneShell.svelte';
   import { browserTimeZone } from './timezone';
+  import { APP_VERSION, formatAppVersion } from './version';
 
   type Mode = 'signin' | 'register';
 
@@ -122,6 +123,7 @@
   {#if error !== ''}
     <p class="error" data-testid="login-error" role="alert">{error}</p>
   {/if}
+  <p class="version" data-testid="app-version">{formatAppVersion(APP_VERSION)}</p>
 </PhoneShell>
 
 <style>
@@ -211,5 +213,12 @@
   .error {
     color: #f5f5f5;
     margin: 1rem 0 0;
+  }
+
+  .version {
+    margin: 2rem 0 0;
+    color: #737373;
+    font-size: 0.85rem;
+    text-align: center;
   }
 </style>

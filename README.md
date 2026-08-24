@@ -38,18 +38,41 @@ Vite proxies `/api` → `http://api:27180` inside Compose (or `http://localhost:
 
 ## Run with Docker (prod)
 
-Set a real `SESSION_SECRET` in `.env`.
+See [Deploy](#deploy-prod). Do not run the dev and prod stacks against `./data` at the same time.
+
+## Deploy (prod)
+
+On the server, from the **repo root**, `scripts/deploy.sh` fast-forwards `main` from origin and rebuilds the prod Compose stack (`api` + `web`).
+
+First-time setup:
+
+1. Clone the repo and copy `.env.production.example` to `.env`.
+2. Fill in `SESSION_SECRET` (`openssl rand -hex 32`), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_REDIRECT_URI` (`https://<host>/api/auth/google/callback`).
+3. Register that same redirect URI in Google Cloud Console.
+
+Each deploy:
 
 ```bash
-docker compose --env-file .env -f docker/compose.prod.yml up --build
+./scripts/deploy.sh
 ```
 
-- App (SPA + `/api` on one origin): [http://localhost](http://localhost) (`WEB_PORT` defaults to 80)
-- API is not published; nginx proxies `/api` to Slim
+The script:
 
-`APP_ENV=production` sets the session cookie `Secure` flag. For HTTP on localhost, set `SESSION_SECURE=false` in `.env`. Behind TLS, leave it unset.
+1. Checks that `.env` exists.
+2. `git fetch origin`, checks out `main`, `git pull --ff-only origin main`.
+3. `docker compose --env-file .env -f docker/compose.prod.yml up -d --build`.
 
-Do not run the dev and prod stacks against `./data` at the same time.
+Login should show the new app version at the bottom of the page (Settings shows the same number).
+
+- App (SPA + `/api` on one origin): port `WEB_PORT` (default 80). API is not published; nginx proxies `/api` to Slim.
+- `APP_ENV=production` sets the session cookie `Secure` flag. For HTTP on localhost, set `SESSION_SECURE=false` in `.env`. Behind TLS, leave it unset.
+- Host `./data` is bind-mounted at `/data`, so accounts survive rebuilds.
+
+To rebuild without pulling git:
+
+```bash
+docker compose --env-file .env -f docker/compose.prod.yml up -d --build
+```
 
 ## Environment
 
@@ -129,12 +152,13 @@ Do not rename the file to a different hash. A different Google email or a passwo
 5. Authorized redirect URIs (exact, no trailing slash):
    - `http://localhost:5173/api/auth/google/callback`
    - `http://127.0.0.1:5173/api/auth/google/callback` if you use `127.0.0.1`
+   - `https://<your-host>/api/auth/google/callback` in production (must match `GOOGLE_REDIRECT_URI`)
    Do not use the API port (`27180`); Google sends the browser back to the SPA origin, and Vite/nginx proxy `/api` to Slim.
 6. Copy the client ID and client secret into `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
 ## Production (SPA + API, same origin)
 
-Preferred: `docker compose --env-file .env -f docker/compose.prod.yml up --build`. nginx serves the built SPA and proxies `/api` to Slim. Host `./data` is the SQLite directory.
+Preferred: `./scripts/deploy.sh` (see [Deploy](#deploy-prod)). nginx serves the built SPA and proxies `/api` to Slim. Host `./data` is the SQLite directory.
 
 Without Compose:
 
