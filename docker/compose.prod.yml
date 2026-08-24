@@ -18,7 +18,6 @@ services:
       DATA_PATH: /data
       SESSION_PATH: /data/sessions
       SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     volumes:
       - ../data:/data
     restart: unless-stopped

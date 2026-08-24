@@ -18,8 +18,10 @@ services:
       APP_DEBUG: "true"
       DATA_PATH: /data
       SESSION_PATH: /data/sessions
+      # SESSION_SECRET interpolates from --env-file .env. Do not list
+      # GOOGLE_CLIENT_ID here: an empty ${GOOGLE_CLIENT_ID:-} would wipe the
+      # env_file value when Compose is started without --env-file.
       SESSION_SECRET: ${SESSION_SECRET:-dev-insecure-session-secret-change-me}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     volumes:
       - ../backend:/app
       - api_vendor:/app/vendor
@@ -35,9 +37,10 @@ services:
       dockerfile: ../docker/Dockerfile.web
     ports:
       - "${WEB_PORT:-5173}:5173"
+    env_file:
+      - ../.env
     environment:
       API_PROXY_TARGET: http://api:27180
-      PUBLIC_GOOGLE_CLIENT_ID: ${PUBLIC_GOOGLE_CLIENT_ID:-${GOOGLE_CLIENT_ID:-}}
     volumes:
       - ../frontend:/app
       - web_node_modules:/app/node_modules

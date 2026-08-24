@@ -24,8 +24,10 @@ Single Set to Failure workout tracking app.
 
 ```bash
 cp -n .env.example .env
-docker compose -f docker/compose.dev.yml up --build
+docker compose --env-file .env -f docker/compose.dev.yml up --build
 ```
+
+Put the Google OAuth **client ID** in `.env` as `GOOGLE_CLIENT_ID` and `PUBLIC_GOOGLE_CLIENT_ID`. Recreate the stack after changing `.env` so Vite and Slim pick it up. The Google client secret is not used (GIS sends an ID token).
 
 - SPA: [http://localhost:5173](http://localhost:5173)
 - API (direct): [http://localhost:27180/api/health](http://localhost:27180/api/health)
@@ -39,7 +41,7 @@ Vite proxies `/api` → `http://api:27180` inside Compose (or `http://localhost:
 Set a real `SESSION_SECRET` in `.env`. Build bakes `PUBLIC_GOOGLE_CLIENT_ID` into the SPA.
 
 ```bash
-docker compose -f docker/compose.prod.yml up --build
+docker compose --env-file .env -f docker/compose.prod.yml up --build
 ```
 
 - App (SPA + `/api` on one origin): [http://localhost](http://localhost) (`WEB_PORT` defaults to 80)
@@ -130,7 +132,7 @@ The login page loads `https://accounts.google.com` for the official button. Keep
 
 ## Production (SPA + API, same origin)
 
-Preferred: `docker compose -f docker/compose.prod.yml up --build`. nginx serves the built SPA and proxies `/api` to Slim. Host `./data` is the SQLite directory.
+Preferred: `docker compose --env-file .env -f docker/compose.prod.yml up --build`. nginx serves the built SPA and proxies `/api` to Slim. Host `./data` is the SQLite directory.
 
 Without Compose:
 
