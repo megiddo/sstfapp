@@ -14,16 +14,16 @@ final class RepoKey
 
     public static function google(string $email): self
     {
-        $normalized = EmailKey::fromEmail($email)->normalized();
+        $key = EmailKey::fromEmail($email);
 
-        return new self($normalized, md5('google|' . $normalized));
+        return new self($key->normalized(), $key->hash());
     }
 
     public static function password(string $username): self
     {
         $normalized = UsernameKey::fromUsername($username)->normalized();
 
-        return new self($normalized, md5('password|' . $normalized));
+        return new self($normalized, md5($normalized));
     }
 
     public function normalized(): string

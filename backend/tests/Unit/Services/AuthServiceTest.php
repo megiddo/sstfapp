@@ -141,7 +141,7 @@ final class AuthServiceTest extends TestCase
         $service->updateMe('0123456789abcdef0123456789abcdef', 'UTC', 'kg');
     }
 
-    public function testRegisterThenGoogleCreatesSeparateRepos(): void
+    public function testRegisterThenGoogleOpensTheSameRepo(): void
     {
         $service = $this->service();
         $created = $service->registerWithPassword('New@Example.COM', 'starter-pass', 'America/Chicago');
@@ -161,12 +161,20 @@ final class AuthServiceTest extends TestCase
 
         $googleService = $this->service();
         $google = $googleService->signInWithGoogle(FakeGoogleOAuthClient::user('New@Example.COM', true, 'sub-n'), 'Europe/Paris');
-        $this->assertSame(['google'], $google['account']->providers);
-        $this->assertSame('Europe/Paris', $google['account']->timezone);
+        $this->assertSame(['password', 'google'], $google['account']->providers);
+        $this->assertSame('America/Chicago', $google['account']->timezone);
         $googleHash = RepoKey::google('New@Example.COM')->hash();
         $this->assertFileExists($this->tmp . '/users/' . $googleHash . '.sqlite');
-        $this->assertNotSame($passwordHash, $googleHash);
-        $this->assertCount(2, glob($this->tmp . '/users/*.sqlite') ?: []);
+        $this->assertSame($passwordHash, $googleHash);
+        $this->assertCount(1, glob($this->tmp . '/users/*.sqlite') ?: []);
+    }
+
+    public function testRegisterAfterGoogleIsAccountExists(): void
+    {
+        $service = $this->service();
+        $service->signInWithGoogle(FakeGoogleOAuthClient::user('both@example.com'), 'UTC');
+        $this->expectException(AccountExistsException::class);
+        $service->registerWithPassword('both@example.com', 'new-pass', null);
     }
 
     public function testPasswordLoginRejectsUnknownWrongAndInvalidEmail(): void
@@ -256,17 +264,29 @@ final class AuthServiceTest extends TestCase
         $this->assertSame('pw@example.com', $login['account']->email);
     }
 
-    public function testSetPasswordOnGoogleFailsWhenPasswordUsernameIsTaken(): void
+    public function testGoogleAfterPasswordOpensTheSameRepoAndSetPasswordNeedsCurrent(): void
     {
         $service = $this->service();
         $service->registerWithPassword('taken@example.com', 'pass-one', null);
 
         $googleService = $this->service();
-        $googleService->signInWithGoogle(FakeGoogleOAuthClient::user('taken@example.com'), 'UTC');
+        $google = $googleService->signInWithGoogle(FakeGoogleOAuthClient::user('taken@example.com'), 'UTC');
+        $this->assertSame(['password', 'google'], $google['account']->providers);
         $hash = RepoKey::google('taken@example.com')->hash();
+        $this->assertSame(RepoKey::password('taken@example.com')->hash(), $hash);
+        $this->assertCount(1, glob($this->tmp . '/users/*.sqlite') ?: []);
 
-        $this->expectException(AccountExistsException::class);
-        $googleService->updateMe($hash, null, null, 'pass-two', null);
+        try {
+            $googleService->updateMe($hash, null, null, 'pass-two', null);
+            $this->fail('missing current');
+        } catch (InvalidCurrentPasswordException) {
+        }
+
+        $changed = $googleService->updateMe($hash, null, null, 'pass-two', 'pass-one');
+        $this->assertContains('password', $changed->providers);
+        $this->assertContains('google', $changed->providers);
+        $login = $googleService->signInWithPassword('taken@example.com', 'pass-two');
+        $this->assertSame('taken@example.com', $login['account']->email);
     }
 
     public function testGoogleOnlyPasswordLoginFails(): void
