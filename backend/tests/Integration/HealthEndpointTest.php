@@ -36,7 +36,7 @@ final class HealthEndpointTest extends HttpTestCase
         $this->assertSame('nosniff', $response->getHeaderLine('X-Content-Type-Options'));
         $this->assertSame('no-referrer', $response->getHeaderLine('Referrer-Policy'));
         $this->assertSame('DENY', $response->getHeaderLine('X-Frame-Options'));
-        $this->assertStringContainsString('https://accounts.google.com', $response->getHeaderLine('Content-Security-Policy'));
+        $this->assertStringNotContainsString('https://accounts.google.com', $response->getHeaderLine('Content-Security-Policy'));
         $this->assertNotSame('', $response->getHeaderLine('X-Request-Id'));
 
         $echo = $this->request('GET', '/api/health', null, ['X-Request-Id' => 'smoke-health-1']);

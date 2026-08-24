@@ -28,7 +28,7 @@ Opening the app:
 | User data | One SQLite 3 file per user | Filename = `md5(provider\|normalized login)`. Includes identity + all user records. Trivial to copy, back up, or export. |
 | Shared data | One global SQLite 3 file | Exercise catalog, schema version, login map, optional user index (repo hash only). |
 | Frontend | SvelteKit, `adapter-static`, `ssr = false` | SPA / “serverless” mode. `fallback: 'index.html'` for client routing. |
-| Auth | Google Identity Services **or** username/password | Separate routes. Linking the same repo is optional (Settings → Set password on a Google account). |
+| Auth | Google OAuth 2 (authorization code) **or** username/password | Separate routes. Linking the same repo is optional (Settings → Set password on a Google account). |
 
 Recommended layout:
 
@@ -71,7 +71,7 @@ Global `login_map` stores `(provider, login_key) → repo_hash`. Password sign-i
 
 On successful Google sign-in:
 
-1. Verify the ID token (`aud`, `iss`, `exp`, `email_verified === true`).
+1. Exchange the authorization `code` with `league/oauth2-google` and require `email_verified`.
 2. Look up `login_map` for `google` + normalized email; otherwise use `md5('google|' + email)`.
 3. If the file does not exist, create it, run user migrations, insert `account` + `identities` (provider `google`, subject = Google `sub`).
 4. If it exists, ensure a `google` identity row is present (link).
@@ -245,7 +245,8 @@ All `/api/*` except auth endpoints require a valid session.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/auth/google` | Body `{ id_token }`. Verify, provision, set cookie. |
+| `GET` | `/api/auth/google` | Redirect to Google. Query `timezone` is stored in a signed OAuth-state cookie. |
+| `GET` | `/api/auth/google/callback` | Exchange `code`, provision, set session cookie, redirect to `/` or `/login?error=`. |
 | `POST` | `/api/auth/logout` | Clear session. |
 | `POST` | `/api/auth/password` | Sign in `{ username, password }` (`email` still accepted). Does not create accounts. |
 | `POST` | `/api/auth/register` | Create a password repo `{ username, password, timezone? }`. Does not merge with Google. |
@@ -290,7 +291,7 @@ backend/src/
   Infrastructure/Sqlite/GlobalDb.php
   Infrastructure/Sqlite/UserDbFactory.php
   Infrastructure/Sqlite/Migrator.php
-  Infrastructure/GoogleIdToken.php
+  Infrastructure/Google/LeagueGoogleOAuthClient.php
 ```
 
 `UserDbFactory` accepts a 32-hex repo hash, opens PDO SQLite with `PRAGMA foreign_keys = ON`, and runs pending user migrations. Refuse any path that is not 32 lowercase hex chars.
@@ -313,20 +314,20 @@ frontend/src/
   lib/format.ts                // time, weekday, weight
 ```
 
-`ssr = false` everywhere. Auth: load the GIS script on `/login`, render the official Google button (not One Tap — it is unreliable on iOS Safari), send `credential` to `/api/auth/google`.
+`ssr = false` everywhere. Auth: **Continue with Google** is a same-origin link to `/api/auth/google`. Slim redirects to Google; the callback sets the session cookie and returns to `/`. Failures land on `/login?error=google` or `/login?error=email_unverified`.
 
 Canonical layout is a single ~390px column. `app.html` must set `viewport` (`width=device-width, initial-scale=1, viewport-fit=cover`), `theme-color`, and 16px minimum input font size so iOS does not zoom on focus. There is no desktop-only week grid or sidebar. See [UI.md](./UI.md).
 
 ## 9. Security
 
-- Verify Google tokens on the server. Reject unverified email.
+- Verify Google OAuth on the server (authorization-code exchange). Reject unverified email.
 - Session cookie: `HttpOnly`, `Secure` (production), `SameSite=Lax`, random ID in PHP session store or a signed table later.
 - User files mode `0600`. Data directory outside the web root (`data/` is not under `public/`).
 - Filename allowlist: `/^[a-f0-9]{32}$/`.
 - Do not list other users’ hashes to clients.
 - CSRF: same-site cookie + JSON `Content-Type` requirement is enough for this SPA; add a CSRF token if the cookie is ever used by form posts.
 - Rate-limit `/api/auth/*`.
-- Security headers on every response: `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `X-Frame-Options: DENY`, and a CSP that allows the GIS script (`https://accounts.google.com`) plus the SPA.
+- Security headers on every response: `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `X-Frame-Options: DENY`, and a CSP that allows the SPA (`'self'`) without third-party Google scripts.
 - Structured JSON logs to STDERR. Info logs may include `email_hash` but never raw emails, ID tokens, or passwords.
 - Optional `X-Request-Id` request/response header.
 - Export is authenticated and returns only the caller’s file.

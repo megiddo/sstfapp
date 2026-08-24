@@ -34,8 +34,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.web.prod
-      args:
-        PUBLIC_GOOGLE_CLIENT_ID: ${PUBLIC_GOOGLE_CLIENT_ID:-${GOOGLE_CLIENT_ID:-}}
     ports:
       - "${WEB_PORT:-80}:80"
     depends_on:

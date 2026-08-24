@@ -9,8 +9,10 @@ use PHPUnit\Framework\TestCase;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Response;
 use Sstf\Api\Domain\AccountExistsException;
+use Sstf\Api\Domain\InvalidGoogleIdTokenException;
 use Sstf\Api\Domain\RepoKey;
 use Sstf\Api\Domain\SystemClock;
+use Sstf\Api\Http\RedirectResponder;
 use Sstf\Api\Http\Controllers\AuthController;
 use Sstf\Api\Http\Controllers\MeController;
 use Sstf\Api\Http\JsonResponder;
@@ -22,7 +24,8 @@ use Sstf\Api\Infrastructure\Sqlite\Migrator;
 use Sstf\Api\Infrastructure\Sqlite\UserDbFactory;
 use Sstf\Api\Infrastructure\Sqlite\UserDirectory;
 use Sstf\Api\Services\AuthService;
-use Sstf\Api\Tests\Fakes\FakeGoogleIdTokenVerifier;
+use Sstf\Api\Tests\Fakes\FakeGoogleOAuthClient;
+use Sstf\Api\Infrastructure\Google\OAuthStateService;
 
 #[CoversClass(AuthController::class)]
 #[CoversClass(MeController::class)]
@@ -45,60 +48,120 @@ final class AuthControllerTest extends TestCase
         parent::tearDown();
     }
 
-    public function testGoogleMapsDomainErrorsAndSetsCookie(): void
+    public function testGoogleOAuthStartAndCallback(): void
     {
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $sessions = $this->sessions();
-        $controller = new AuthController($this->auth($verifier), $sessions);
+        $oauth = new FakeGoogleOAuthClient();
+        $oauth->willReturnUser('ok', FakeGoogleOAuthClient::user('ok@example.com'));
+        $controller = new AuthController($this->auth(), $this->sessions(), $oauth, $this->oauthState());
         $factory = new ServerRequestFactory();
 
-        $unverified = $verifier;
-        $unverified->willVerify('u', FakeGoogleIdTokenVerifier::user('a@b.com', false));
-        $response = $controller->google(
-            $factory->createServerRequest('POST', '/api/auth/google')->withParsedBody(['id_token' => 'u']),
+        $start = $controller->googleStart(
+            $factory->createServerRequest('GET', '/api/auth/google')->withQueryParams(['timezone' => 'UTC']),
             new Response(),
         );
-        $this->assertSame(401, $response->getStatusCode());
-        $this->assertStringContainsString('email_unverified', (string) $response->getBody());
+        $this->assertSame(302, $start->getStatusCode());
+        $this->assertStringContainsString('accounts.google.com', $start->getHeaderLine('Location'));
+        $oauthCookie = $this->cookieValue($start->getHeaderLine('Set-Cookie'));
+        $query = parse_url($start->getHeaderLine('Location'), PHP_URL_QUERY);
+        $this->assertIsString($query);
+        parse_str($query, $params);
+        $this->assertIsString($params['state'] ?? null);
 
-        $response = $controller->google(
-            $factory->createServerRequest('POST', '/api/auth/google')->withParsedBody(['id_token' => 'nope']),
+        $ok = $controller->googleCallback(
+            $factory->createServerRequest('GET', '/api/auth/google/callback')
+                ->withQueryParams([
+                    'code' => 'ok',
+                    'state' => (string) $params['state'],
+                ])
+                ->withCookieParams([OAuthStateService::COOKIE => $oauthCookie]),
             new Response(),
         );
-        $this->assertSame(401, $response->getStatusCode());
-        $this->assertStringContainsString('invalid_token', (string) $response->getBody());
-
-        $response = $controller->google(
-            $factory->createServerRequest('POST', '/api/auth/google')->withParsedBody(null),
-            new Response(),
-        );
-        $this->assertSame(400, $response->getStatusCode());
-
-        $response = $controller->google(
-            $factory->createServerRequest('POST', '/api/auth/google')->withParsedBody(['id_token' => 1]),
-            new Response(),
-        );
-        $this->assertSame(400, $response->getStatusCode());
-
-        $verifier->willVerify('ok', FakeGoogleIdTokenVerifier::user('ok@example.com'));
-        $ok = $controller->google(
-            $factory->createServerRequest('POST', '/api/auth/google')->withParsedBody([
-                'id_token' => 'ok',
-                'timezone' => 123,
-            ]),
-            new Response(),
-        );
-        $this->assertSame(200, $ok->getStatusCode());
-        $this->assertNotSame('', $ok->getHeaderLine('Set-Cookie'));
+        $this->assertSame(302, $ok->getStatusCode());
+        $this->assertSame('/', $ok->getHeaderLine('Location'));
         $this->assertStringContainsString('HttpOnly', $ok->getHeaderLine('Set-Cookie'));
+    }
+
+    public function testGoogleOAuthFailurePaths(): void
+    {
+        $factory = new ServerRequestFactory();
+        $oauth = new FakeGoogleOAuthClient();
+        $oauth->configured = false;
+        $controller = new AuthController($this->auth(), $this->sessions(), $oauth, $this->oauthState());
+
+        $unconfigured = $controller->googleStart(
+            $factory->createServerRequest('GET', '/api/auth/google'),
+            new Response(),
+        );
+        $this->assertSame(302, $unconfigured->getStatusCode());
+        $this->assertSame('/login?error=google', $unconfigured->getHeaderLine('Location'));
+
+        $oauth->configured = true;
+        $oauth->failAuthorization = true;
+        $authFails = $controller->googleStart(
+            $factory->createServerRequest('GET', '/api/auth/google')->withQueryParams(['timezone' => ['not-a-string']]),
+            new Response(),
+        );
+        $this->assertSame(302, $authFails->getStatusCode());
+        $this->assertSame('/login?error=google', $authFails->getHeaderLine('Location'));
+
+        $oauth->failAuthorization = false;
+        $denied = $controller->googleCallback(
+            $factory->createServerRequest('GET', '/api/auth/google/callback')
+                ->withQueryParams(['error' => 'access_denied', 'state' => 'x']),
+            new Response(),
+        );
+        $this->assertSame(302, $denied->getStatusCode());
+        $this->assertSame('/login?error=google', $denied->getHeaderLine('Location'));
+
+        $missing = $controller->googleCallback(
+            $factory->createServerRequest('GET', '/api/auth/google/callback')
+                ->withQueryParams(['code' => 'ok', 'state' => 'nope']),
+            new Response(),
+        );
+        $this->assertSame(302, $missing->getStatusCode());
+        $this->assertSame('/login?error=google', $missing->getHeaderLine('Location'));
+
+        $oauth->willReturnUser('unv', FakeGoogleOAuthClient::user('unv@example.com', false));
+        $start = $controller->googleStart(
+            $factory->createServerRequest('GET', '/api/auth/google')->withQueryParams(['timezone' => 'UTC']),
+            new Response(),
+        );
+        $oauthCookie = $this->cookieValue($start->getHeaderLine('Set-Cookie'));
+        $query = parse_url($start->getHeaderLine('Location'), PHP_URL_QUERY);
+        $this->assertIsString($query);
+        parse_str($query, $params);
+
+        $unverified = $controller->googleCallback(
+            $factory->createServerRequest('GET', '/api/auth/google/callback')
+                ->withQueryParams([
+                    'code' => 'unv',
+                    'state' => (string) $params['state'],
+                ])
+                ->withCookieParams([OAuthStateService::COOKIE => $oauthCookie]),
+            new Response(),
+        );
+        $this->assertSame(302, $unverified->getStatusCode());
+        $this->assertSame('/login?error=email_unverified', $unverified->getHeaderLine('Location'));
+
+        $oauth->willFail('bad', new InvalidGoogleIdTokenException());
+        $invalid = $controller->googleCallback(
+            $factory->createServerRequest('GET', '/api/auth/google/callback')
+                ->withQueryParams([
+                    'code' => 'bad',
+                    'state' => (string) $params['state'],
+                ])
+                ->withCookieParams([OAuthStateService::COOKIE => $oauthCookie]),
+            new Response(),
+        );
+        $this->assertSame(302, $invalid->getStatusCode());
+        $this->assertSame('/login?error=google', $invalid->getHeaderLine('Location'));
     }
 
     public function testLogoutAndMe(): void
     {
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $auth = $this->auth($verifier);
+        $auth = $this->auth();
         $sessions = $this->sessions();
-        $authController = new AuthController($auth, $sessions);
+        $authController = new AuthController($auth, $sessions, new FakeGoogleOAuthClient(), $this->oauthState());
         $meController = new MeController($auth);
 
         $missing = $meController->me(
@@ -107,13 +170,8 @@ final class AuthControllerTest extends TestCase
         );
         $this->assertSame(401, $missing->getStatusCode());
 
-        $verifier->willVerify('ok', FakeGoogleIdTokenVerifier::user('me@example.com'));
-        $login = $authController->google(
-            (new ServerRequestFactory())->createServerRequest('POST', '/api/auth/google')
-                ->withParsedBody(['id_token' => 'ok']),
-            new Response(),
-        );
-        $cookie = $this->cookieValue($login->getHeaderLine('Set-Cookie'));
+        $result = $auth->signInWithGoogle(FakeGoogleOAuthClient::user('me@example.com'), 'UTC');
+        $cookie = $result['cookie'];
         $this->assertNotSame('', $cookie);
 
         $hash = RepoKey::google('me@example.com')->hash();
@@ -218,9 +276,8 @@ final class AuthControllerTest extends TestCase
 
     public function testPasswordLoginMapsErrorsAndSetsCookie(): void
     {
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $auth = $this->auth($verifier);
-        $controller = new AuthController($auth, $this->sessions());
+        $auth = $this->auth();
+        $controller = new AuthController($auth, $this->sessions(), new FakeGoogleOAuthClient(), $this->oauthState());
         $factory = new ServerRequestFactory();
 
         $notArray = $controller->password(
@@ -274,7 +331,7 @@ final class AuthControllerTest extends TestCase
 
     public function testRegisterMapsErrorsAndSetsCookie(): void
     {
-        $controller = new AuthController($this->auth(new FakeGoogleIdTokenVerifier()), $this->sessions());
+        $controller = new AuthController($this->auth(), $this->sessions(), new FakeGoogleOAuthClient(), $this->oauthState());
         $factory = new ServerRequestFactory();
 
         $notArray = $controller->register(
@@ -349,10 +406,8 @@ final class AuthControllerTest extends TestCase
 
     public function testPatchPasswordTypeErrors(): void
     {
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $verifier->willVerify('ok', FakeGoogleIdTokenVerifier::user('me@example.com'));
-        $auth = $this->auth($verifier);
-        $auth->signInWithGoogle('ok', 'UTC');
+        $auth = $this->auth();
+        $auth->signInWithGoogle(FakeGoogleOAuthClient::user('me@example.com'), 'UTC');
         $me = new MeController($auth);
         $hash = RepoKey::google('me@example.com')->hash();
         $factory = new ServerRequestFactory();
@@ -405,7 +460,7 @@ final class AuthControllerTest extends TestCase
         $this->assertStringContainsString('invalid_current_password', (string) $wrongCurrent->getBody());
     }
 
-    private function auth(FakeGoogleIdTokenVerifier $verifier): AuthService
+    private function auth(): AuthService
     {
         $migrator = new Migrator();
         $root = dirname(__DIR__, 4);
@@ -413,7 +468,6 @@ final class AuthControllerTest extends TestCase
         $global = new GlobalDb($this->tmp . '/global.sqlite', $migrator, $root . '/migrations/global');
 
         return new AuthService(
-            $verifier,
             new UserDirectory($users, $global, new SystemClock()),
             $this->sessions(),
             [
@@ -421,6 +475,16 @@ final class AuthControllerTest extends TestCase
                 'time_cost' => 1,
                 'threads' => 1,
             ],
+        );
+    }
+
+
+    private function oauthState(): OAuthStateService
+    {
+        return new OAuthStateService(
+            new SessionCookie(OAuthStateService::COOKIE, false),
+            'testing-session-secret-key',
+            new SystemClock(),
         );
     }
 

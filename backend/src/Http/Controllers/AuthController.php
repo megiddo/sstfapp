@@ -12,6 +12,9 @@ use Sstf\Api\Domain\InvalidCredentialsException;
 use Sstf\Api\Domain\InvalidGoogleIdTokenException;
 use Sstf\Api\Domain\InvalidPasswordException;
 use Sstf\Api\Http\JsonResponder;
+use Sstf\Api\Http\RedirectResponder;
+use Sstf\Api\Infrastructure\Google\GoogleOAuthClientInterface;
+use Sstf\Api\Infrastructure\Google\OAuthStateService;
 use Sstf\Api\Infrastructure\Session\SessionService;
 use Sstf\Api\Services\AuthService;
 
@@ -20,36 +23,70 @@ final class AuthController
     public function __construct(
         private readonly AuthService $auth,
         private readonly SessionService $sessions,
+        private readonly GoogleOAuthClientInterface $googleOAuth,
+        private readonly OAuthStateService $oauthState,
     ) {
     }
 
-    public function google(Request $request, Response $response): Response
+    public function googleStart(Request $request, Response $response): Response
     {
-        $body = $request->getParsedBody();
-        if (!is_array($body)) {
-            return JsonResponder::error('invalid_request', 'Google sign-in failed', 400);
+        if (!$this->googleOAuth->isConfigured()) {
+            return $this->oauthFailureRedirect('google');
         }
 
-        $token = $body['id_token'] ?? null;
-        if (!is_string($token) || trim($token) === '') {
-            return JsonResponder::error('invalid_request', 'Google sign-in failed', 400);
-        }
-
-        $timezone = $body['timezone'] ?? null;
+        $query = $request->getQueryParams();
+        $timezone = $query['timezone'] ?? null;
         if ($timezone !== null && !is_string($timezone)) {
             $timezone = null;
         }
 
+        $issued = $this->oauthState->issue($timezone);
         try {
-            $result = $this->auth->signInWithGoogle($token, $timezone);
-        } catch (EmailUnverifiedException) {
-            return JsonResponder::error('email_unverified', 'Email not verified', 401);
+            $url = $this->googleOAuth->authorizationUrl($issued['state']);
         } catch (InvalidGoogleIdTokenException) {
-            return JsonResponder::error('invalid_token', 'Google sign-in failed', 401);
+            return $this->oauthFailureRedirect('google');
         }
 
-        return JsonResponder::data($result['account']->toApi())
-            ->withAddedHeader('Set-Cookie', $this->sessions->setCookieHeader($result['cookie']));
+        return RedirectResponder::to($url)
+            ->withAddedHeader('Set-Cookie', $issued['header']);
+    }
+
+    public function googleCallback(Request $request, Response $response): Response
+    {
+        $query = $request->getQueryParams();
+        $stored = $this->oauthState->read($request);
+        $expireOauth = $this->oauthState->expireHeader();
+
+        $googleError = $query['error'] ?? null;
+        if (is_string($googleError) && $googleError !== '') {
+            return $this->oauthFailureRedirect('google', $expireOauth);
+        }
+
+        $state = $query['state'] ?? null;
+        $code = $query['code'] ?? null;
+        if (
+            $stored === null
+            || !is_string($state)
+            || $state === ''
+            || !is_string($code)
+            || trim($code) === ''
+            || !hash_equals($stored['state'], $state)
+        ) {
+            return $this->oauthFailureRedirect('google', $expireOauth);
+        }
+
+        try {
+            $user = $this->googleOAuth->fetchUser($code);
+            $result = $this->auth->signInWithGoogle($user, $stored['timezone']);
+        } catch (EmailUnverifiedException) {
+            return $this->oauthFailureRedirect('email_unverified', $expireOauth);
+        } catch (InvalidGoogleIdTokenException) {
+            return $this->oauthFailureRedirect('google', $expireOauth);
+        }
+
+        return RedirectResponder::to('/')
+            ->withAddedHeader('Set-Cookie', $this->sessions->setCookieHeader($result['cookie']))
+            ->withAddedHeader('Set-Cookie', $expireOauth);
     }
 
     public function password(Request $request, Response $response): Response
@@ -114,5 +151,15 @@ final class AuthController
 
         return JsonResponder::data(['ok' => true])
             ->withAddedHeader('Set-Cookie', $this->sessions->expireCookieHeader());
+    }
+
+    private function oauthFailureRedirect(string $error, ?string $expireOauth = null): Response
+    {
+        $response = RedirectResponder::to('/login?error=' . rawurlencode($error));
+        if ($expireOauth !== null) {
+            $response = $response->withAddedHeader('Set-Cookie', $expireOauth);
+        }
+
+        return $response;
     }
 }

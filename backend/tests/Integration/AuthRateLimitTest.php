@@ -45,7 +45,7 @@ final class AuthRateLimitTest extends HttpTestCase
         $this->assertStringNotContainsString('wrong', (string) $blocked->getBody());
         $this->assertStringNotContainsString($body['email'], (string) $blocked->getBody());
 
-        $google = $this->request('POST', '/api/auth/google', ['id_token' => 'anything']);
+        $google = $this->request('GET', '/api/auth/google');
         $this->assertSame(429, $google->getStatusCode());
         $this->assertSame('rate_limited', $this->json($google)['error']['code']);
     }

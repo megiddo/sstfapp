@@ -12,15 +12,15 @@ use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
 use Sstf\Api\Domain\ClockInterface;
 use Sstf\Api\Domain\RepoKey;
-use Sstf\Api\Infrastructure\Google\GoogleIdTokenVerifierInterface;
+use Sstf\Api\Infrastructure\Google\GoogleOAuthClientInterface;
 use Sstf\Api\Tests\Fakes\FakeClock;
-use Sstf\Api\Tests\Fakes\FakeGoogleIdTokenVerifier;
+use Sstf\Api\Tests\Fakes\FakeGoogleOAuthClient;
 
 abstract class HttpTestCase extends TestCase
 {
     protected App $app;
 
-    protected FakeGoogleIdTokenVerifier $googleVerifier;
+    protected FakeGoogleOAuthClient $googleOAuth;
 
     protected FakeClock $clock;
 
@@ -40,6 +40,8 @@ abstract class HttpTestCase extends TestCase
         $_ENV['SESSION_PATH'] = $this->dataDir . '/sessions';
         $_ENV['SESSION_SECRET'] = 'testing-session-secret-key';
         $_ENV['GOOGLE_CLIENT_ID'] = 'test-google-client-id.apps.googleusercontent.com';
+        $_ENV['GOOGLE_CLIENT_SECRET'] = 'test-google-client-secret';
+        $_ENV['GOOGLE_REDIRECT_URI'] = 'http://localhost:5173/api/auth/google/callback';
         $_ENV['APP_ENV'] = 'testing';
         $_ENV['AUTH_RATE_LIMIT_MAX'] = (string) $this->rateLimitMax();
         $_ENV['AUTH_RATE_LIMIT_WINDOW'] = '60';
@@ -47,18 +49,20 @@ abstract class HttpTestCase extends TestCase
         putenv('SESSION_PATH=' . $this->dataDir . '/sessions');
         putenv('SESSION_SECRET=testing-session-secret-key');
         putenv('GOOGLE_CLIENT_ID=' . $_ENV['GOOGLE_CLIENT_ID']);
+        putenv('GOOGLE_CLIENT_SECRET=test-google-client-secret');
+        putenv('GOOGLE_REDIRECT_URI=http://localhost:5173/api/auth/google/callback');
         putenv('APP_ENV=testing');
         putenv('AUTH_RATE_LIMIT_MAX=' . $this->rateLimitMax());
         putenv('AUTH_RATE_LIMIT_WINDOW=60');
 
         $this->cookies = [];
-        $this->googleVerifier = new FakeGoogleIdTokenVerifier();
+        $this->googleOAuth = new FakeGoogleOAuthClient();
         $this->clock = new FakeClock(1_703_116_800);
         $this->app = require dirname(__DIR__) . '/config/bootstrap.php';
 
         $container = $this->app->getContainer();
         $this->assertInstanceOf(Container::class, $container);
-        $container->set(GoogleIdTokenVerifierInterface::class, $this->googleVerifier);
+        $container->set(GoogleOAuthClientInterface::class, $this->googleOAuth);
         $container->set(ClockInterface::class, $this->clock);
     }
 
@@ -81,6 +85,11 @@ abstract class HttpTestCase extends TestCase
         $request = (new ServerRequestFactory())->createServerRequest($method, $uri, [
             'REMOTE_ADDR' => '127.0.0.1',
         ]);
+        $queryString = parse_url($uri, PHP_URL_QUERY);
+        if (is_string($queryString) && $queryString !== '') {
+            parse_str($queryString, $query);
+            $request = $request->withQueryParams($query);
+        }
         $request = $request->withCookieParams($this->cookies);
 
         if ($this->cookies !== []) {
@@ -139,15 +148,32 @@ abstract class HttpTestCase extends TestCase
 
     protected function signIn(string $email, ?string $timezone = null): void
     {
-        $token = 'signin-' . $email . '-' . bin2hex(random_bytes(4));
-        $this->googleVerifier->willVerify($token, FakeGoogleIdTokenVerifier::user($email));
-        $body = ['id_token' => $token];
-        if ($timezone !== null) {
-            $body['timezone'] = $timezone;
-        }
+        $code = 'signin-' . $email . '-' . bin2hex(random_bytes(4));
+        $this->googleOAuth->willReturnUser($code, FakeGoogleOAuthClient::user($email));
+        $callback = $this->completeGoogleOAuth($code, $timezone);
+        $this->assertSame(302, $callback->getStatusCode());
+        $this->assertSame('/', $callback->getHeaderLine('Location'));
+    }
 
-        $response = $this->request('POST', '/api/auth/google', $body);
-        $this->assertSame(200, $response->getStatusCode());
+    protected function completeGoogleOAuth(string $code, ?string $timezone = null): \Psr\Http\Message\ResponseInterface
+    {
+        $startPath = '/api/auth/google';
+        if ($timezone !== null) {
+            $startPath .= '?timezone=' . rawurlencode($timezone);
+        }
+        $start = $this->request('GET', $startPath);
+        $this->assertSame(302, $start->getStatusCode());
+        $location = $start->getHeaderLine('Location');
+        $this->assertNotSame('', $location);
+        $query = parse_url($location, PHP_URL_QUERY);
+        $this->assertIsString($query);
+        parse_str($query, $params);
+        $this->assertIsString($params['state'] ?? null);
+
+        return $this->request(
+            'GET',
+            '/api/auth/google/callback?code=' . rawurlencode($code) . '&state=' . rawurlencode((string) $params['state']),
+        );
     }
 
     protected function rateLimitMax(): int

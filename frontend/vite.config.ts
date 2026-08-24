@@ -1,14 +1,6 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vitest/config';
 
-if (
-  (process.env.PUBLIC_GOOGLE_CLIENT_ID === undefined || process.env.PUBLIC_GOOGLE_CLIENT_ID === '') &&
-  process.env.GOOGLE_CLIENT_ID !== undefined &&
-  process.env.GOOGLE_CLIENT_ID !== ''
-) {
-  process.env.PUBLIC_GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
-}
-
 export default defineConfig({
   plugins: [sveltekit()],
   resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,

@@ -21,7 +21,7 @@ use Sstf\Api\Domain\LoginTakenException;
 use Sstf\Api\Domain\RepoKey;
 use Sstf\Api\Domain\UnauthenticatedException;
 use Sstf\Api\Domain\UsernameKey;
-use Sstf\Api\Infrastructure\Google\GoogleIdTokenVerifierInterface;
+use Sstf\Api\Domain\VerifiedGoogleUser;
 use Sstf\Api\Infrastructure\Session\SessionService;
 use Sstf\Api\Infrastructure\Sqlite\UserDirectory;
 
@@ -31,7 +31,6 @@ final class AuthService
      * @param array<string, int> $hashOptions
      */
     public function __construct(
-        private readonly GoogleIdTokenVerifierInterface $verifier,
         private readonly UserDirectory $users,
         private readonly SessionService $sessions,
         private readonly array $hashOptions = [],
@@ -41,9 +40,8 @@ final class AuthService
     /**
      * @return array{account: AccountSnapshot, cookie: string}
      */
-    public function signInWithGoogle(string $idToken, ?string $timezone): array
+    public function signInWithGoogle(VerifiedGoogleUser $verified, ?string $timezone): array
     {
-        $verified = $this->verifier->verify($idToken);
         if ($verified->emailVerified !== true) {
             throw new EmailUnverifiedException();
         }

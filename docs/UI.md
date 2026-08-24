@@ -63,7 +63,7 @@ Workout is the default after login. Deep-link `/` with `?set=` after a manual sw
 
 - App name: **SSTF** with subtitle “Single set to failure.”
 - **Continue with Google** (registers or signs in) or username/password **Sign in** / **Create account**. No instructional blurb — the controls are the copy.
-- Inputs are 16px on a phone column. Official Google button (not One Tap). Password registration asks for confirm password.
+- Inputs are 16px on a phone column. Continue with Google is a same-origin link (not One Tap). Password registration asks for confirm password.
 - If Google is not configured, the password form still works.
 - Error: “Google sign-in failed” / “Email not verified” / “Sign-in failed” / “Too many attempts” / “Account already exists” / “Registration failed” / “Passwords do not match” / “Enter a password” — no stack traces.
 
@@ -182,7 +182,7 @@ Tapping a line is read-only in MVP (no edit/delete of history until a later mile
 ### F1 — First Google login
 
 Given a new Google account with verified email  
-When they complete GIS  
+When they finish Google OAuth  
 Then a user SQLite file is created, session starts, and Workout shows the empty onboarding state.
 
 ### F1b — First username/password registration

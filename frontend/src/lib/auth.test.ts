@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchMe, hasPasswordIdentity, patchMe, registerWithPassword, signInWithGoogle, signInWithPassword, signOut } from './auth';
+import { fetchMe, googleStartUrl, hasPasswordIdentity, patchMe, registerWithPassword, signInWithPassword, signOut } from './auth';
 import {
   AUTH_ERROR_ACCOUNT_EXISTS,
   AUTH_ERROR_EMAIL_UNVERIFIED,
@@ -33,6 +33,7 @@ describe('authErrors', () => {
   it('maps codes to UI.md copy', () => {
     expect(messageForAuthCode('email_unverified')).toBe(AUTH_ERROR_EMAIL_UNVERIFIED);
     expect(messageForAuthCode('email_unverified')).toBe('Email not verified');
+    expect(messageForAuthCode('google')).toBe(AUTH_ERROR_GOOGLE_FAILED);
     expect(messageForAuthCode('invalid_token')).toBe(AUTH_ERROR_GOOGLE_FAILED);
     expect(messageForAuthCode('invalid_token')).toBe('Google sign-in failed');
     expect(messageForAuthCode(undefined)).toBe('Google sign-in failed');
@@ -291,70 +292,10 @@ describe('auth client', () => {
     await expect(fetchMe(badUnit)).resolves.toEqual({ ok: false, status: 200 });
   });
 
-  it('signInWithGoogle posts credential as id_token with timezone', async () => {
-    const fetcher = vi.fn(async (path: string, init?: RequestInit) => {
-      expect(path).toBe('/api/auth/google');
-      expect(init?.method).toBe('POST');
-      expect(init?.credentials).toBe('include');
-      expect(init?.body).toBe(JSON.stringify({ id_token: 'cred', timezone: 'America/Chicago' }));
-      return {
-        ok: true,
-        status: 200,
-        json: async () => meBody,
-      } as Response;
-    });
-
-    await expect(signInWithGoogle('cred', 'America/Chicago', fetcher)).resolves.toEqual({
-      ok: true,
-      me: meBody.data,
-    });
-  });
-
-  it('signInWithGoogle maps email_unverified and generic failures', async () => {
-    const unverified = async () =>
-      ({
-        ok: false,
-        status: 401,
-        json: async () => ({ error: { code: 'email_unverified', message: 'Email not verified' } }),
-      }) as Response;
-    await expect(signInWithGoogle('c', 'UTC', unverified)).resolves.toEqual({
-      ok: false,
-      code: 'email_unverified',
-      message: 'Email not verified',
-    });
-
-    const failed = async () =>
-      ({
-        ok: false,
-        status: 401,
-        json: async () => ({ error: { code: 'invalid_token', message: 'Google sign-in failed' } }),
-      }) as Response;
-    await expect(signInWithGoogle('c', 'UTC', failed)).resolves.toEqual({
-      ok: false,
-      code: 'invalid_token',
-      message: 'Google sign-in failed',
-    });
-
-    const weird = async () =>
-      ({
-        ok: true,
-        status: 200,
-        json: async () => ({ data: {} }),
-      }) as Response;
-    await expect(signInWithGoogle('c', 'UTC', weird)).resolves.toEqual({
-      ok: false,
-      code: 'invalid_token',
-      message: 'Google sign-in failed',
-    });
-
-    const boom = async () => {
-      throw new Error('offline');
-    };
-    await expect(signInWithGoogle('c', 'UTC', boom)).resolves.toEqual({
-      ok: false,
-      code: 'invalid_token',
-      message: 'Google sign-in failed',
-    });
+  it('googleStartUrl includes timezone', () => {
+    expect(googleStartUrl('America/Chicago')).toBe(
+      '/api/auth/google?timezone=' + encodeURIComponent('America/Chicago'),
+    );
   });
 
   it('signInWithPassword posts username and password', async () => {
