@@ -24,4 +24,25 @@ describe('ConfirmSheet', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(onCancel).toHaveBeenCalledTimes(2);
   });
+
+  it('offers a second action when provided', async () => {
+    const onConfirm = vi.fn();
+    const onAlt = vi.fn();
+    const onCancel = vi.fn();
+    render(ConfirmSheet, {
+      props: {
+        title: 'Copy',
+        message: 'Copy Morning onto this set.',
+        confirmLabel: 'Replace Set Exercises',
+        altLabel: 'Add Exercises to Set',
+        onConfirm,
+        onAlt,
+        onCancel,
+      },
+    });
+    expect(screen.getByRole('dialog', { name: 'Copy' })).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Add Exercises to Set' }));
+    expect(onAlt).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });

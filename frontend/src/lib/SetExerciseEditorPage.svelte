@@ -178,13 +178,15 @@
     copySourceSets = result.sets;
   }
 
-  async function confirmCopy() {
-    if (pendingCopy === null) {
+  async function confirmCopy(mode: 'replace' | 'append') {
+    if (pendingCopy === null || current === null) {
       return;
     }
     const source = pendingCopy;
+    const existing = idsFrom(current.exercises);
     pendingCopy = null;
-    await persist(catalogIdsFromSet(source));
+    const copied = catalogIdsFromSet(source);
+    await persist(mode === 'append' ? [...existing, ...copied] : copied);
   }
 
   async function handlePick(exercise: Exercise) {
@@ -311,10 +313,12 @@
 
 {#if pendingCopy !== null}
   <ConfirmSheet
-    title="Replace this set's exercises?"
+    title="Copy"
     message={`Copy ${pendingCopy.name} (${DAY_NAMES[pendingCopy.day_of_week] ?? 'day'}) onto this set.`}
-    confirmLabel="Copy exercises"
-    onConfirm={() => void confirmCopy()}
+    confirmLabel="Replace Set Exercises"
+    altLabel="Add Exercises to Set"
+    onConfirm={() => void confirmCopy('replace')}
+    onAlt={() => void confirmCopy('append')}
     onCancel={() => (pendingCopy = null)}
   />
 {/if}
