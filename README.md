@@ -27,7 +27,7 @@ cp -n .env.example .env
 docker compose --env-file .env -f docker/compose.dev.yml up --build
 ```
 
-Put the Google OAuth **client ID** and **client secret** in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Recreate the stack after changing `.env` so Slim picks them up. The login page redirects through `/api/auth/google` (authorization code). Authorized redirect URI: `http://localhost:5173/api/auth/google/callback`.
+Put the Google OAuth **client ID** and **client secret** in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`. Recreate the stack after changing `.env` so Slim picks them up. **Continue with Google** is a full-page navigation to the API (`http://localhost:27180/api/auth/google`). Slim (League) redirects to Google; Google returns to Slim; Slim sets the session cookie and 302s back to the SPA. Authorized redirect URI: `http://localhost:27180/api/auth/google/callback`.
 
 - SPA: [http://localhost:5173](http://localhost:5173)
 - API (direct): [http://localhost:27180/api/health](http://localhost:27180/api/health)
@@ -83,9 +83,10 @@ Copy `.env.example` to `.env`. Compose also sets container values.
 | `APP_ENV` | `development` / `testing` / `production`. Testing disables Slim error logs. Production sets the session cookie `Secure` flag. |
 | `APP_DEBUG` | When true, `JsonErrorHandler` may include exception messages. |
 | `DATA_PATH` | Directory for `global.sqlite` and `users/*.sqlite`. Both Compose files set this to `/data` and bind-mount host `./data`. |
+| `APP_URL` | SPA origin Slim redirects to after Google. Dev default `http://localhost:5173`. Leave unset in production (same origin). |
 | `GOOGLE_CLIENT_ID` | Google OAuth 2 client ID. Used with the League client to start authorization. |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth 2 client secret. Required for the authorization-code exchange. |
-| `GOOGLE_REDIRECT_URI` | Callback URL registered in Google Cloud. Default `http://localhost:5173/api/auth/google/callback`. |
+| `GOOGLE_REDIRECT_URI` | Callback URL registered in Google Cloud. Dev default `http://localhost:27180/api/auth/google/callback` (PHP, not Vite). |
 | `SESSION_SECRET` | HMAC key for the HttpOnly `sstf_session` cookie. Use a long random string in production. Required by `compose.prod.yml`. |
 | `SESSION_SECURE` | Cookie `Secure` flag. Unset: true when `APP_ENV=production`. Set `false` for HTTP localhost. |
 | `AUTH_RATE_LIMIT_MAX` | Max `/api/auth/*` requests per IP per window. Defaults to 10 (10000 when `APP_ENV=testing`). |
@@ -150,10 +151,10 @@ Do not rename the file to a different hash. A different Google email or a passwo
    - `http://127.0.0.1:5173` if you open the app that way
    - your production HTTPS origin when you deploy
 5. Authorized redirect URIs (exact, no trailing slash):
-   - `http://localhost:5173/api/auth/google/callback`
-   - `http://127.0.0.1:5173/api/auth/google/callback` if you use `127.0.0.1`
+   - `http://localhost:27180/api/auth/google/callback` for Docker dev (Google returns to Slim, which 302s to the SPA)
+   - `http://127.0.0.1:27180/api/auth/google/callback` if you use `127.0.0.1`
    - `https://<your-host>/api/auth/google/callback` in production (must match `GOOGLE_REDIRECT_URI`)
-   Do not use the API port (`27180`); Google sends the browser back to the SPA origin, and Vite/nginx proxy `/api` to Slim.
+   Do not send the local callback through Vite (`:5173`). Production nginx already proxies `/api` to Slim on the same origin.
 6. Copy the client ID and client secret into `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
 ## Production (SPA + API, same origin)

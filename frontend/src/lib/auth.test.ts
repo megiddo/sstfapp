@@ -296,6 +296,9 @@ describe('auth client', () => {
     expect(googleStartUrl('America/Chicago')).toBe(
       '/api/auth/google?timezone=' + encodeURIComponent('America/Chicago'),
     );
+    expect(googleStartUrl('America/Chicago', 'http://localhost:27180/')).toBe(
+      'http://localhost:27180/api/auth/google?timezone=' + encodeURIComponent('America/Chicago'),
+    );
   });
 
   it('signInWithPassword posts username and password', async () => {

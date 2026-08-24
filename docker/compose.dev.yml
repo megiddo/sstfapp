@@ -22,6 +22,8 @@ services:
       # GOOGLE_CLIENT_ID here: an empty ${GOOGLE_CLIENT_ID:-} would wipe the
       # env_file value when Compose is started without --env-file.
       SESSION_SECRET: ${SESSION_SECRET:-dev-insecure-session-secret-change-me}
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:27180/api/auth/google/callback}
     volumes:
       - ../backend:/app
       - api_vendor:/app/vendor
@@ -41,6 +43,7 @@ services:
       - ../.env
     environment:
       API_PROXY_TARGET: http://api:27180
+      VITE_API_ORIGIN: http://localhost:27180
     volumes:
       - ../frontend:/app
       - web_node_modules:/app/node_modules

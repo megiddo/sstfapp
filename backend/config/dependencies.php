@@ -181,12 +181,13 @@ return [
         return new AuthRateLimit($c->get(AuthRateLimiterInterface::class));
     },
 
-    AuthController::class => static function ($c): AuthController {
+    AuthController::class => static function ($c) use ($settings): AuthController {
         return new AuthController(
             $c->get(AuthService::class),
             $c->get(SessionService::class),
             $c->get(GoogleOAuthClientInterface::class),
             $c->get(OAuthStateService::class),
+            (string) $settings['app']['url'],
         );
     },
 
