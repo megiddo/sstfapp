@@ -157,6 +157,47 @@ final class AuthControllerTest extends TestCase
         $this->assertSame('/login?error=google', $invalid->getHeaderLine('Location'));
     }
 
+    public function testGoogleCallbackRedirectsToAppUrl(): void
+    {
+        $oauth = new FakeGoogleOAuthClient();
+        $oauth->willReturnUser('ok', FakeGoogleOAuthClient::user('ok@example.com'));
+        $controller = new AuthController(
+            $this->auth(),
+            $this->sessions(),
+            $oauth,
+            $this->oauthState(),
+            'http://localhost:5173/',
+        );
+        $factory = new ServerRequestFactory();
+
+        $start = $controller->googleStart(
+            $factory->createServerRequest('GET', '/api/auth/google')->withQueryParams(['timezone' => 'UTC']),
+            new Response(),
+        );
+        $oauthCookie = $this->cookieValue($start->getHeaderLine('Set-Cookie'));
+        $query = parse_url($start->getHeaderLine('Location'), PHP_URL_QUERY);
+        $this->assertIsString($query);
+        parse_str($query, $params);
+
+        $ok = $controller->googleCallback(
+            $factory->createServerRequest('GET', '/api/auth/google/callback')
+                ->withQueryParams([
+                    'code' => 'ok',
+                    'state' => (string) $params['state'],
+                ])
+                ->withCookieParams([OAuthStateService::COOKIE => $oauthCookie]),
+            new Response(),
+        );
+        $this->assertSame('http://localhost:5173/', $ok->getHeaderLine('Location'));
+
+        $denied = $controller->googleCallback(
+            $factory->createServerRequest('GET', '/api/auth/google/callback')
+                ->withQueryParams(['error' => 'access_denied', 'state' => 'x']),
+            new Response(),
+        );
+        $this->assertSame('http://localhost:5173/login?error=google', $denied->getHeaderLine('Location'));
+    }
+
     public function testLogoutAndMe(): void
     {
         $auth = $this->auth();

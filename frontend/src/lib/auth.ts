@@ -71,9 +71,15 @@ export async function fetchMe(fetcher: typeof fetch = fetch): Promise<MeResult> 
   }
 }
 
-export function googleStartUrl(timezone: string): string {
+export function googleStartUrl(timezone: string, apiOrigin = googleApiOrigin()): string {
   const params = new URLSearchParams({ timezone });
-  return `/api/auth/google?${params.toString()}`;
+  const origin = apiOrigin.replace(/\/$/, '');
+  return `${origin}/api/auth/google?${params.toString()}`;
+}
+
+function googleApiOrigin(): string {
+  const origin = import.meta.env.VITE_API_ORIGIN;
+  return typeof origin === 'string' ? origin : '';
 }
 
 export async function signInWithPassword(

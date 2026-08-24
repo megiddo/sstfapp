@@ -38,6 +38,16 @@ final class OAuthStateServiceTest extends TestCase
         $this->assertSame($issued['state'], $read['state']);
         $this->assertSame('America/Chicago', $read['timezone']);
 
+        $phpDecoded = urldecode($value);
+        $this->assertNotSame($value, $phpDecoded);
+        $decodedRead = $service->read(
+            $factory->createServerRequest('GET', '/callback')
+                ->withCookieParams([OAuthStateService::COOKIE => $phpDecoded]),
+        );
+        $this->assertNotNull($decodedRead);
+        $this->assertSame($issued['state'], $decodedRead['state']);
+        $this->assertSame('America/Chicago', $decodedRead['timezone']);
+
         $emptyTz = $service->issue(null);
         $emptyValue = $this->cookieValue($emptyTz['header']);
         $none = $service->read(

@@ -66,7 +66,10 @@ final class OAuthStateService
             return null;
         }
 
-        $payload = $state . '.' . $expiresRaw . '.' . $tzEnc;
+        // PHP urldecodes cookie values, so America%2FChicago arrives as America/Chicago.
+        // HMAC is over the percent-encoded timezone; re-encode before compare.
+        $timezone = rawurldecode($tzEnc);
+        $payload = $state . '.' . $expiresRaw . '.' . rawurlencode($timezone);
         $expected = hash_hmac('sha256', $payload, $this->secret);
         if (!hash_equals($expected, $hmac)) {
             return null;
@@ -76,7 +79,6 @@ final class OAuthStateService
             return null;
         }
 
-        $timezone = rawurldecode($tzEnc);
         if ($timezone === '') {
             $timezone = null;
         }

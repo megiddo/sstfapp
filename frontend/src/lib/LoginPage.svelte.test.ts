@@ -20,12 +20,14 @@ describe('LoginPage', () => {
       'href',
       '/api/auth/google?timezone=' + encodeURIComponent('America/Chicago'),
     );
+    expect(google).toHaveAttribute('rel', 'external');
+    expect(google).toHaveAttribute('data-sveltekit-reload', '');
     expect(screen.getByLabelText('Username')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Sign in' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Create account' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
-    expect(screen.getByTestId('app-version')).toHaveTextContent('v0.1.2');
+    expect(screen.getByTestId('app-version')).toHaveTextContent('v0.1.3');
   });
 
   it('lets password registration work alongside Google', async () => {

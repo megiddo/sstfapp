@@ -6,6 +6,7 @@ $dataPath = getenv('DATA_PATH') ?: ($_ENV['DATA_PATH'] ?? dirname(__DIR__, 2) . 
 $dataPath = rtrim((string) $dataPath, '/');
 
 $appEnv = (string) ($_ENV['APP_ENV'] ?? getenv('APP_ENV') ?: 'development');
+$appUrl = rtrim((string) ($_ENV['APP_URL'] ?? getenv('APP_URL') ?: ''), '/');
 $sessionSecureRaw = $_ENV['SESSION_SECURE'] ?? getenv('SESSION_SECURE');
 $sessionSecure = ($sessionSecureRaw === false || $sessionSecureRaw === null || $sessionSecureRaw === '')
     ? ($appEnv === 'production')
@@ -25,6 +26,7 @@ return [
         'name' => 'sstf-api',
         'env' => $appEnv,
         'debug' => filter_var($_ENV['APP_DEBUG'] ?? getenv('APP_DEBUG') ?: true, FILTER_VALIDATE_BOOLEAN),
+        'url' => $appUrl,
     ],
     'data' => [
         'path' => $dataPath,
@@ -32,7 +34,7 @@ return [
     'google' => [
         'client_id' => (string) ($_ENV['GOOGLE_CLIENT_ID'] ?? getenv('GOOGLE_CLIENT_ID') ?: ''),
         'client_secret' => (string) ($_ENV['GOOGLE_CLIENT_SECRET'] ?? getenv('GOOGLE_CLIENT_SECRET') ?: ''),
-        'redirect_uri' => (string) ($_ENV['GOOGLE_REDIRECT_URI'] ?? getenv('GOOGLE_REDIRECT_URI') ?: 'http://localhost:5173/api/auth/google/callback'),
+        'redirect_uri' => (string) ($_ENV['GOOGLE_REDIRECT_URI'] ?? getenv('GOOGLE_REDIRECT_URI') ?: 'http://localhost:27180/api/auth/google/callback'),
     ],
     'session' => [
         'secret' => (string) ($_ENV['SESSION_SECRET'] ?? getenv('SESSION_SECRET') ?: ''),

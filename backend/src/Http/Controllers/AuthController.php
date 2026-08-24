@@ -25,6 +25,7 @@ final class AuthController
         private readonly SessionService $sessions,
         private readonly GoogleOAuthClientInterface $googleOAuth,
         private readonly OAuthStateService $oauthState,
+        private readonly string $appUrl = '',
     ) {
     }
 
@@ -84,7 +85,7 @@ final class AuthController
             return $this->oauthFailureRedirect('google', $expireOauth);
         }
 
-        return RedirectResponder::to('/')
+        return RedirectResponder::to($this->spaLocation('/'))
             ->withAddedHeader('Set-Cookie', $this->sessions->setCookieHeader($result['cookie']))
             ->withAddedHeader('Set-Cookie', $expireOauth);
     }
@@ -155,11 +156,20 @@ final class AuthController
 
     private function oauthFailureRedirect(string $error, ?string $expireOauth = null): Response
     {
-        $response = RedirectResponder::to('/login?error=' . rawurlencode($error));
+        $response = RedirectResponder::to($this->spaLocation('/login?error=' . rawurlencode($error)));
         if ($expireOauth !== null) {
             $response = $response->withAddedHeader('Set-Cookie', $expireOauth);
         }
 
         return $response;
+    }
+
+    private function spaLocation(string $path): string
+    {
+        if ($this->appUrl === '') {
+            return $path;
+        }
+
+        return rtrim($this->appUrl, '/') . $path;
     }
 }

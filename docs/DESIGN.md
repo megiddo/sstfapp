@@ -246,7 +246,7 @@ All `/api/*` except auth endpoints require a valid session.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/auth/google` | Redirect to Google. Query `timezone` is stored in a signed OAuth-state cookie. |
-| `GET` | `/api/auth/google/callback` | Exchange `code`, provision, set session cookie, redirect to `/` or `/login?error=`. |
+| `GET` | `/api/auth/google/callback` | League exchanges `code` on this origin, sets the session cookie, redirects to `APP_URL/` or `APP_URL/login?error=`. |
 | `POST` | `/api/auth/logout` | Clear session. |
 | `POST` | `/api/auth/password` | Sign in `{ username, password }` (`email` still accepted). Does not create accounts. |
 | `POST` | `/api/auth/register` | Create a password repo `{ username, password, timezone? }`. Does not merge with Google. |
@@ -314,7 +314,7 @@ frontend/src/
   lib/format.ts                // time, weekday, weight
 ```
 
-`ssr = false` everywhere. Auth: **Continue with Google** is a same-origin link to `/api/auth/google`. Slim redirects to Google; the callback sets the session cookie and returns to `/`. Failures land on `/login?error=google` or `/login?error=email_unverified`.
+`ssr = false` everywhere. Auth: **Continue with Google** is a full-page navigation to Slim `/api/auth/google` (in Docker dev, that is the API origin, not Vite). Slim redirects to Google; Google returns to Slim; League exchanges the code; Slim sets the session cookie and 302s to `APP_URL` (`/` in production). Failures land on `/login?error=google` or `/login?error=email_unverified`.
 
 Canonical layout is a single ~390px column. `app.html` must set `viewport` (`width=device-width, initial-scale=1, viewport-fit=cover`), `theme-color`, and 16px minimum input font size so iOS does not zoom on focus. There is no desktop-only week grid or sidebar. See [UI.md](./UI.md).
 

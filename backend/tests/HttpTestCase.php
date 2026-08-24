@@ -41,7 +41,7 @@ abstract class HttpTestCase extends TestCase
         $_ENV['SESSION_SECRET'] = 'testing-session-secret-key';
         $_ENV['GOOGLE_CLIENT_ID'] = 'test-google-client-id.apps.googleusercontent.com';
         $_ENV['GOOGLE_CLIENT_SECRET'] = 'test-google-client-secret';
-        $_ENV['GOOGLE_REDIRECT_URI'] = 'http://localhost:5173/api/auth/google/callback';
+        $_ENV['GOOGLE_REDIRECT_URI'] = 'http://localhost:27180/api/auth/google/callback';
         $_ENV['APP_ENV'] = 'testing';
         $_ENV['AUTH_RATE_LIMIT_MAX'] = (string) $this->rateLimitMax();
         $_ENV['AUTH_RATE_LIMIT_WINDOW'] = '60';
@@ -50,7 +50,7 @@ abstract class HttpTestCase extends TestCase
         putenv('SESSION_SECRET=testing-session-secret-key');
         putenv('GOOGLE_CLIENT_ID=' . $_ENV['GOOGLE_CLIENT_ID']);
         putenv('GOOGLE_CLIENT_SECRET=test-google-client-secret');
-        putenv('GOOGLE_REDIRECT_URI=http://localhost:5173/api/auth/google/callback');
+        putenv('GOOGLE_REDIRECT_URI=http://localhost:27180/api/auth/google/callback');
         putenv('APP_ENV=testing');
         putenv('AUTH_RATE_LIMIT_MAX=' . $this->rateLimitMax());
         putenv('AUTH_RATE_LIMIT_WINDOW=60');
@@ -191,7 +191,7 @@ abstract class HttpTestCase extends TestCase
             }
 
             $name = substr($pair, 0, $eq);
-            $value = substr($pair, $eq + 1);
+            $value = urldecode(substr($pair, $eq + 1));
             $expired = $value === '' || preg_match('/Max-Age=0(?:;|$)/i', $line) === 1;
             if ($expired) {
                 unset($this->cookies[$name]);

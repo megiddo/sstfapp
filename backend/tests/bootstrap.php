@@ -8,7 +8,7 @@ $_ENV['DATA_PATH'] = sys_get_temp_dir() . '/sstf-data-' . getmypid();
 $_ENV['SESSION_SECRET'] = 'testing-session-secret-key';
 $_ENV['GOOGLE_CLIENT_ID'] = 'test-google-client-id.apps.googleusercontent.com';
 $_ENV['GOOGLE_CLIENT_SECRET'] = 'test-google-client-secret';
-$_ENV['GOOGLE_REDIRECT_URI'] = 'http://localhost:5173/api/auth/google/callback';
+$_ENV['GOOGLE_REDIRECT_URI'] = 'http://localhost:27180/api/auth/google/callback';
 $_ENV['SESSION_PATH'] = $_ENV['DATA_PATH'] . '/sessions';
 
 putenv('APP_ENV=testing');

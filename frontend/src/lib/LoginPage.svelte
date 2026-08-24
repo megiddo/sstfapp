@@ -61,7 +61,15 @@
 </script>
 
 <PhoneShell title="Single Set" subtitle="Single set to failure.">
-  <a class="google" data-testid="google-button" href={googleStartUrl(timeZone())}>Continue with Google</a>
+  <a
+    class="google"
+    data-testid="google-button"
+    rel="external"
+    data-sveltekit-reload
+    href={googleStartUrl(timeZone())}
+  >
+    Continue with Google
+  </a>
   <p class="divider">or</p>
   <div class="mode" role="tablist" aria-label="Username and password">
     <button
