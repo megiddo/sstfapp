@@ -22,11 +22,11 @@ use Sstf\Api\Http\Middleware\SessionAuth;
 use Sstf\Api\Infrastructure\Log\JsonLogger;
 use Sstf\Api\Infrastructure\RateLimit\AuthRateLimiterInterface;
 use Sstf\Api\Infrastructure\RateLimit\MemoryAuthRateLimiter;
-use Sstf\Api\Infrastructure\Google\GoogleCertsProviderInterface;
-use Sstf\Api\Infrastructure\Google\GoogleIdTokenVerifierInterface;
-use Sstf\Api\Infrastructure\Google\GoogleJwtIdTokenVerifier;
-use Sstf\Api\Infrastructure\Google\UrlGoogleCertsProvider;
-use Sstf\Api\Infrastructure\Http\UrlFetcher;
+use League\OAuth2\Client\Provider\Google;
+use Sstf\Api\Infrastructure\Google\GoogleOAuthClientInterface;
+use Sstf\Api\Infrastructure\Google\LeagueGoogleOAuthClient;
+use Sstf\Api\Infrastructure\Google\OAuthStateService;
+use Sstf\Api\Infrastructure\Google\UnconfiguredGoogleOAuthClient;
 use Sstf\Api\Infrastructure\Session\FileSessionStore;
 use Sstf\Api\Infrastructure\Session\SessionCookie;
 use Sstf\Api\Infrastructure\Session\SessionService;
@@ -81,19 +81,31 @@ return [
 
     ClockInterface::class => static fn (): ClockInterface => new SystemClock(),
 
-    UrlFetcher::class => static fn (): UrlFetcher => new UrlFetcher(),
+    GoogleOAuthClientInterface::class => static function () use ($settings): GoogleOAuthClientInterface {
+        $clientId = (string) $settings['google']['client_id'];
+        $clientSecret = (string) $settings['google']['client_secret'];
+        $redirectUri = (string) $settings['google']['redirect_uri'];
+        if ($clientId === '' || $clientSecret === '' || $redirectUri === '') {
+            return new UnconfiguredGoogleOAuthClient();
+        }
 
-    GoogleCertsProviderInterface::class => static function ($c) use ($settings): GoogleCertsProviderInterface {
-        return new UrlGoogleCertsProvider(
-            (string) $settings['google']['certs_url'],
-            $c->get(UrlFetcher::class),
+        return new LeagueGoogleOAuthClient(
+            new Google([
+                'clientId' => $clientId,
+                'clientSecret' => $clientSecret,
+                'redirectUri' => $redirectUri,
+            ]),
+            $clientId,
         );
     },
 
-    GoogleIdTokenVerifierInterface::class => static function ($c) use ($settings): GoogleIdTokenVerifierInterface {
-        return new GoogleJwtIdTokenVerifier(
-            (string) $settings['google']['client_id'],
-            $c->get(GoogleCertsProviderInterface::class),
+    OAuthStateService::class => static function ($c) use ($settings): OAuthStateService {
+        return new OAuthStateService(
+            new SessionCookie(
+                OAuthStateService::COOKIE,
+                (bool) $settings['session']['secure'],
+            ),
+            (string) $settings['session']['secret'],
             $c->get(ClockInterface::class),
         );
     },
@@ -145,7 +157,6 @@ return [
         $password = $settings['password'];
 
         return new AuthService(
-            $c->get(GoogleIdTokenVerifierInterface::class),
             $c->get(UserDirectory::class),
             $c->get(SessionService::class),
             [
@@ -174,6 +185,8 @@ return [
         return new AuthController(
             $c->get(AuthService::class),
             $c->get(SessionService::class),
+            $c->get(GoogleOAuthClientInterface::class),
+            $c->get(OAuthStateService::class),
         );
     },
 

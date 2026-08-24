@@ -31,15 +31,15 @@ Companion docs: [DESIGN.md](./DESIGN.md), [UI.md](./UI.md).
 
 **Goal:** A verified Google email creates or opens a Google-namespaced user sqlite file and a session.
 
-- [x] Env: `GOOGLE_CLIENT_ID`, session secret, `APP_ENV`
+- [x] Env: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, session secret, `APP_ENV`
 - [x] `EmailKey`: trim, lowercase, `md5` hex filename
-- [x] `POST /api/auth/google` verifies ID token (`aud`, `iss`, `exp`, `email_verified`)
+- [x] `GET /api/auth/google` + `GET /api/auth/google/callback` exchange an OAuth code (`email_verified`)
 - [x] Provision user DB + run user migrations + `account` + `identities(google)`
 - [x] Existing file: link Google `sub` if missing (same email)
 - [x] Session cookie `HttpOnly`, `SameSite=Lax`, `Secure` in production
 - [x] `GET /api/me`, `POST /api/auth/logout`
 - [x] Auth middleware on `/api/*` except health + auth
-- [x] Login page: official GIS button (not One Tap), error states
+- [x] Login page: Continue with Google (authorization-code redirect), error states
 - [x] Authenticated shell redirects unknown session to `/login`
 - [x] Capture browser timezone into `account.timezone` on first login
 - [x] Upsert `user_index.email_hash` in global DB

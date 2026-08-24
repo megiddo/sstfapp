@@ -31,7 +31,8 @@ return [
     ],
     'google' => [
         'client_id' => (string) ($_ENV['GOOGLE_CLIENT_ID'] ?? getenv('GOOGLE_CLIENT_ID') ?: ''),
-        'certs_url' => (string) ($_ENV['GOOGLE_CERTS_URL'] ?? getenv('GOOGLE_CERTS_URL') ?: 'https://www.googleapis.com/oauth2/v1/certs'),
+        'client_secret' => (string) ($_ENV['GOOGLE_CLIENT_SECRET'] ?? getenv('GOOGLE_CLIENT_SECRET') ?: ''),
+        'redirect_uri' => (string) ($_ENV['GOOGLE_REDIRECT_URI'] ?? getenv('GOOGLE_REDIRECT_URI') ?: 'http://localhost:5173/api/auth/google/callback'),
     ],
     'session' => [
         'secret' => (string) ($_ENV['SESSION_SECRET'] ?? getenv('SESSION_SECRET') ?: ''),

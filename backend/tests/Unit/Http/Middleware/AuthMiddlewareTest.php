@@ -33,13 +33,13 @@ final class AuthMiddlewareTest extends TestCase
         $mw = new RequireJsonContentType();
         $handler = $this->okHandler();
 
-        $plain = $mw->process($this->request('POST', '/api/auth/google'), $handler);
+        $plain = $mw->process($this->request('POST', '/api/auth/password'), $handler);
         $this->assertSame(415, $plain->getStatusCode());
         $body = json_decode((string) $plain->getBody(), true);
         $this->assertSame('invalid_content_type', $body['error']['code']);
 
         $ok = $mw->process(
-            $this->request('POST', '/api/auth/google')->withHeader('Content-Type', 'application/json'),
+            $this->request('POST', '/api/auth/password')->withHeader('Content-Type', 'application/json'),
             $handler,
         );
         $this->assertSame(204, $ok->getStatusCode());
@@ -51,7 +51,7 @@ final class AuthMiddlewareTest extends TestCase
         $this->assertSame(204, $charset->getStatusCode());
 
         $wrong = $mw->process(
-            $this->request('POST', '/api/auth/google')->withHeader('Content-Type', 'application/jsonx'),
+            $this->request('POST', '/api/auth/password')->withHeader('Content-Type', 'application/jsonx'),
             $handler,
         );
         $this->assertSame(415, $wrong->getStatusCode());
@@ -71,7 +71,7 @@ final class AuthMiddlewareTest extends TestCase
         $health = $mw->process($this->request('GET', '/api/health'), $handler);
         $this->assertSame(204, $health->getStatusCode());
 
-        $auth = $mw->process($this->request('POST', '/api/auth/google'), $handler);
+        $auth = $mw->process($this->request('GET', '/api/auth/google'), $handler);
         $this->assertSame(204, $auth->getStatusCode());
 
         $spa = $mw->process($this->request('GET', '/login'), $handler);
@@ -116,7 +116,7 @@ final class AuthMiddlewareTest extends TestCase
 
         $first = $mw->process($this->request('POST', '/api/auth/password'), $handler);
         $this->assertSame(204, $first->getStatusCode());
-        $blocked = $mw->process($this->request('POST', '/api/auth/google'), $handler);
+        $blocked = $mw->process($this->request('GET', '/api/auth/google'), $handler);
         $this->assertSame(429, $blocked->getStatusCode());
         $payload = json_decode((string) $blocked->getBody(), true);
         $this->assertSame('rate_limited', $payload['error']['code']);

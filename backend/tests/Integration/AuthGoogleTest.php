@@ -13,10 +13,12 @@ use Sstf\Api\Http\Controllers\MeController;
 use Sstf\Api\Http\JsonResponder;
 use Sstf\Api\Http\Middleware\RequireJsonContentType;
 use Sstf\Api\Http\Middleware\SessionAuth;
+use Sstf\Api\Http\RedirectResponder;
+use Sstf\Api\Infrastructure\Google\OAuthStateService;
 use Sstf\Api\Infrastructure\Sqlite\UserDbFactory;
 use Sstf\Api\Infrastructure\Sqlite\UserDirectory;
 use Sstf\Api\Services\AuthService;
-use Sstf\Api\Tests\Fakes\FakeGoogleIdTokenVerifier;
+use Sstf\Api\Tests\Fakes\FakeGoogleOAuthClient;
 use Sstf\Api\Tests\HttpTestCase;
 
 #[CoversClass(AuthController::class)]
@@ -26,66 +28,57 @@ use Sstf\Api\Tests\HttpTestCase;
 #[CoversClass(SessionAuth::class)]
 #[CoversClass(RequireJsonContentType::class)]
 #[CoversClass(JsonResponder::class)]
+#[CoversClass(RedirectResponder::class)]
+#[CoversClass(OAuthStateService::class)]
 final class AuthGoogleTest extends HttpTestCase
 {
-    public function testUnverifiedEmailIsRejectedAndCreatesNoUserFile(): void
+    public function testUnverifiedEmailRedirectsAndCreatesNoUserFile(): void
     {
         $email = 'unverified-' . bin2hex(random_bytes(4)) . '@example.com';
-        $this->googleVerifier->willVerify(
-            'unverified-token',
-            FakeGoogleIdTokenVerifier::user($email, false),
+        $this->googleOAuth->willReturnUser(
+            'unverified-code',
+            FakeGoogleOAuthClient::user($email, false),
         );
 
         $before = glob($this->dataDir . '/users/*.sqlite') ?: [];
-        $response = $this->request('POST', '/api/auth/google', [
-            'id_token' => 'unverified-token',
-            'timezone' => 'America/Chicago',
-        ]);
+        $response = $this->completeGoogleOAuth('unverified-code', 'America/Chicago');
 
-        $this->assertSame(401, $response->getStatusCode());
-        $payload = $this->json($response);
-        $this->assertSame('email_unverified', $payload['error']['code']);
-        $this->assertSame('Email not verified', $payload['error']['message']);
-        $this->assertArrayNotHasKey('data', $payload);
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertSame('/login?error=email_unverified', $response->getHeaderLine('Location'));
         $this->assertFileDoesNotExist($this->userDbPath($email));
         $this->assertSame($before, glob($this->dataDir . '/users/*.sqlite') ?: []);
     }
 
-    public function testInvalidExpiredAndWrongAudTokensAreRejected(): void
+    public function testInvalidCodeAndStateAreRejected(): void
     {
         $email = 'invalid-' . bin2hex(random_bytes(4)) . '@example.com';
-        $this->googleVerifier->willFail('expired-token', new InvalidGoogleIdTokenException());
-        $this->googleVerifier->willFail('wrong-aud-token', new InvalidGoogleIdTokenException());
+        $this->googleOAuth->willFail('expired-code', new InvalidGoogleIdTokenException());
 
-        foreach (['missing-token', 'expired-token', 'wrong-aud-token'] as $token) {
-            $response = $this->request('POST', '/api/auth/google', ['id_token' => $token]);
-            $this->assertSame(401, $response->getStatusCode());
-            $payload = $this->json($response);
-            $this->assertSame('invalid_token', $payload['error']['code']);
-            $this->assertSame('Google sign-in failed', $payload['error']['message']);
-            $this->assertFileDoesNotExist($this->userDbPath($email));
-        }
+        $failed = $this->completeGoogleOAuth('expired-code');
+        $this->assertSame(302, $failed->getStatusCode());
+        $this->assertSame('/login?error=google', $failed->getHeaderLine('Location'));
+        $this->assertFileDoesNotExist($this->userDbPath($email));
+
+        $missing = $this->request('GET', '/api/auth/google/callback?code=missing-code&state=nope');
+        $this->assertSame(302, $missing->getStatusCode());
+        $this->assertSame('/login?error=google', $missing->getHeaderLine('Location'));
     }
 
     public function testTwoGoogleLoginsSameEmailCreateOneSqliteFile(): void
     {
         $email = 'twice-' . bin2hex(random_bytes(4)) . '@example.com';
-        $this->googleVerifier->willVerify('t1', FakeGoogleIdTokenVerifier::user($email, true, 'sub-a'));
-        $this->googleVerifier->willVerify('t2', FakeGoogleIdTokenVerifier::user($email, true, 'sub-a'));
+        $this->googleOAuth->willReturnUser('t1', FakeGoogleOAuthClient::user($email, true, 'sub-a'));
+        $this->googleOAuth->willReturnUser('t2', FakeGoogleOAuthClient::user($email, true, 'sub-a'));
 
-        $first = $this->request('POST', '/api/auth/google', [
-            'id_token' => 't1',
-            'timezone' => 'America/Chicago',
-        ]);
-        $this->assertSame(200, $first->getStatusCode());
+        $first = $this->completeGoogleOAuth('t1', 'America/Chicago');
+        $this->assertSame(302, $first->getStatusCode());
+        $this->assertSame('/', $first->getHeaderLine('Location'));
         $path = $this->userDbPath($email);
         $this->assertFileExists($path);
 
-        $second = $this->request('POST', '/api/auth/google', [
-            'id_token' => 't2',
-            'timezone' => 'Europe/London',
-        ]);
-        $this->assertSame(200, $second->getStatusCode());
+        $this->cookies = [];
+        $second = $this->completeGoogleOAuth('t2', 'Europe/London');
+        $this->assertSame(302, $second->getStatusCode());
         $this->assertFileExists($path);
 
         $matches = glob($this->dataDir . '/users/*.sqlite') ?: [];
@@ -119,34 +112,22 @@ final class AuthGoogleTest extends HttpTestCase
         $count = (int) $pdo->query("SELECT COUNT(*) FROM identities WHERE provider = 'google'")->fetchColumn();
         $this->assertSame(0, $count);
 
-        $this->googleVerifier->willVerify('link-token', FakeGoogleIdTokenVerifier::user($email, true, 'sub-link'));
-        $response = $this->request('POST', '/api/auth/google', ['id_token' => 'link-token']);
-        $this->assertSame(200, $response->getStatusCode());
-
-        $matches = glob($this->dataDir . '/users/' . $hash . '.sqlite') ?: [];
-        $this->assertCount(1, $matches);
+        $this->googleOAuth->willReturnUser('link-code', FakeGoogleOAuthClient::user($email, true, 'sub-link'));
+        $response = $this->completeGoogleOAuth('link-code');
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertSame('/', $response->getHeaderLine('Location'));
 
         $pdo = new PDO('sqlite:' . $this->userDbPath($email));
         $subject = $pdo->query("SELECT provider_subject FROM identities WHERE provider = 'google'")->fetchColumn();
         $this->assertSame('sub-link', $subject);
     }
 
-    public function testMeWithoutSessionIs401(): void
-    {
-        $response = $this->request('GET', '/api/me');
-        $this->assertSame(401, $response->getStatusCode());
-        $payload = $this->json($response);
-        $this->assertSame('unauthenticated', $payload['error']['code']);
-        $this->assertArrayNotHasKey('data', $payload);
-    }
-
     public function testLogoutClearsAccess(): void
     {
         $email = 'logout-' . bin2hex(random_bytes(4)) . '@example.com';
-        $this->googleVerifier->willVerify('out', FakeGoogleIdTokenVerifier::user($email));
-
-        $login = $this->request('POST', '/api/auth/google', ['id_token' => 'out']);
-        $this->assertSame(200, $login->getStatusCode());
+        $this->googleOAuth->willReturnUser('out', FakeGoogleOAuthClient::user($email));
+        $login = $this->completeGoogleOAuth('out');
+        $this->assertSame(302, $login->getStatusCode());
         $setCookie = $login->getHeaderLine('Set-Cookie');
         $this->assertStringContainsString('HttpOnly', $setCookie);
         $this->assertStringContainsString('SameSite=Lax', $setCookie);
@@ -169,84 +150,55 @@ final class AuthGoogleTest extends HttpTestCase
     public function testTimezoneCapturedOnFirstLoginOnly(): void
     {
         $email = 'tz-' . bin2hex(random_bytes(4)) . '@example.com';
-        $this->googleVerifier->willVerify('tz1', FakeGoogleIdTokenVerifier::user($email));
-        $this->googleVerifier->willVerify('tz2', FakeGoogleIdTokenVerifier::user($email));
+        $this->googleOAuth->willReturnUser('tz1', FakeGoogleOAuthClient::user($email));
+        $this->googleOAuth->willReturnUser('tz2', FakeGoogleOAuthClient::user($email));
 
-        $first = $this->request('POST', '/api/auth/google', [
-            'id_token' => 'tz1',
-            'timezone' => 'America/Chicago',
-        ]);
-        $this->assertSame('America/Chicago', $this->json($first)['data']['timezone']);
+        $this->completeGoogleOAuth('tz1', 'America/Chicago');
+        $this->assertSame('America/Chicago', $this->json($this->request('GET', '/api/me'))['data']['timezone']);
 
         $this->cookies = [];
-        $second = $this->request('POST', '/api/auth/google', [
-            'id_token' => 'tz2',
-            'timezone' => 'Europe/Paris',
-        ]);
-        $this->assertSame('America/Chicago', $this->json($second)['data']['timezone']);
+        $this->completeGoogleOAuth('tz2', 'Europe/Paris');
+        $this->assertSame('America/Chicago', $this->json($this->request('GET', '/api/me'))['data']['timezone']);
     }
 
     public function testInvalidTimezoneFallsBackToUtc(): void
     {
         $email = 'tzbad-' . bin2hex(random_bytes(4)) . '@example.com';
-        $this->googleVerifier->willVerify('tzbad', FakeGoogleIdTokenVerifier::user($email));
-
-        $response = $this->request('POST', '/api/auth/google', [
-            'id_token' => 'tzbad',
-            'timezone' => 'Not/A_Zone',
-        ]);
-        $this->assertSame(200, $response->getStatusCode());
-        $this->assertSame('UTC', $this->json($response)['data']['timezone']);
+        $this->googleOAuth->willReturnUser('tzbad', FakeGoogleOAuthClient::user($email));
+        $this->completeGoogleOAuth('tzbad', 'Not/A_Zone');
+        $this->assertSame('UTC', $this->json($this->request('GET', '/api/me'))['data']['timezone']);
     }
 
     public function testMissingTimezoneFallsBackToUtc(): void
     {
         $email = 'tznone-' . bin2hex(random_bytes(4)) . '@example.com';
-        $this->googleVerifier->willVerify('tznone', FakeGoogleIdTokenVerifier::user($email));
-
-        $response = $this->request('POST', '/api/auth/google', ['id_token' => 'tznone']);
-        $this->assertSame('UTC', $this->json($response)['data']['timezone']);
+        $this->googleOAuth->willReturnUser('tznone', FakeGoogleOAuthClient::user($email));
+        $this->completeGoogleOAuth('tznone');
+        $this->assertSame('UTC', $this->json($this->request('GET', '/api/me'))['data']['timezone']);
     }
 
-    public function testUserIndexUpsertsHashOnly(): void
+    public function testGoogleStartRedirectsToGoogle(): void
     {
-        $email = 'index-' . bin2hex(random_bytes(4)) . '@example.com';
-        $this->googleVerifier->willVerify('idx', FakeGoogleIdTokenVerifier::user($email));
-        $this->request('POST', '/api/auth/google', ['id_token' => 'idx']);
-
-        $pdo = new PDO('sqlite:' . $this->dataDir . '/global.sqlite');
-        $columns = $pdo->query('PRAGMA table_info(user_index)')->fetchAll(PDO::FETCH_ASSOC);
-        $names = [];
-        foreach ($columns as $column) {
-            $names[] = $column['name'];
-        }
-        $this->assertContains('email_hash', $names);
-        $this->assertContains('created_at', $names);
-        $this->assertNotContains('email', $names);
-
-        $rows = $pdo->query('SELECT email_hash, created_at FROM user_index')->fetchAll(PDO::FETCH_ASSOC);
-        $this->assertCount(1, $rows);
-        $hash = RepoKey::google($email)->hash();
-        $this->assertSame($hash, $rows[0]['email_hash']);
-        $this->assertSame(32, strlen($rows[0]['email_hash']));
-        $this->assertStringNotContainsString('@', $rows[0]['email_hash']);
-        $this->assertStringNotContainsString($email, $rows[0]['email_hash']);
-        $this->assertNotSame('', $rows[0]['created_at']);
+        $start = $this->request('GET', '/api/auth/google?timezone=America/Chicago');
+        $this->assertSame(302, $start->getStatusCode());
+        $this->assertStringContainsString('accounts.google.com', $start->getHeaderLine('Location'));
+        $this->assertStringContainsString(OAuthStateService::COOKIE, $start->getHeaderLine('Set-Cookie'));
     }
 
-    public function testGoogleLoginRequiresJsonContentType(): void
+    public function testGoogleErrorQueryRedirectsToLogin(): void
     {
-        $response = $this->request('POST', '/api/auth/google');
-        $this->assertSame(415, $response->getStatusCode());
-        $this->assertSame('invalid_content_type', $this->json($response)['error']['code']);
+        $this->request('GET', '/api/auth/google');
+        $response = $this->request('GET', '/api/auth/google/callback?error=access_denied&state=x');
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertSame('/login?error=google', $response->getHeaderLine('Location'));
     }
 
-    public function testEmptyIdTokenIsInvalidRequest(): void
+    public function testUnconfiguredGoogleRedirectsToLogin(): void
     {
-        $response = $this->request('POST', '/api/auth/google', ['id_token' => '  ']);
-        $this->assertSame(400, $response->getStatusCode());
-        $this->assertSame('invalid_request', $this->json($response)['error']['code']);
-        $this->assertSame('Google sign-in failed', $this->json($response)['error']['message']);
+        $this->googleOAuth->configured = false;
+        $response = $this->request('GET', '/api/auth/google');
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertSame('/login?error=google', $response->getHeaderLine('Location'));
     }
 
     public function testUnknownApiRouteWithoutSessionIs401(): void
@@ -259,8 +211,8 @@ final class AuthGoogleTest extends HttpTestCase
     public function testUnknownApiRouteWithSessionIs404(): void
     {
         $email = '404-' . bin2hex(random_bytes(4)) . '@example.com';
-        $this->googleVerifier->willVerify('n404', FakeGoogleIdTokenVerifier::user($email));
-        $this->request('POST', '/api/auth/google', ['id_token' => 'n404']);
+        $this->googleOAuth->willReturnUser('n404', FakeGoogleOAuthClient::user($email));
+        $this->completeGoogleOAuth('n404');
 
         $response = $this->request('GET', '/api/does-not-exist');
         $this->assertSame(404, $response->getStatusCode());

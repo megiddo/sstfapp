@@ -23,8 +23,8 @@ return static function (App $app): void {
     $app->get('/api/exercises', [ExerciseController::class, 'index']);
     $app->get('/api/exercises/suggested', [ExerciseController::class, 'suggested']);
     $app->post('/api/exercises', [ExerciseController::class, 'create']);
-    $app->post('/api/auth/google', [AuthController::class, 'google'])
-        ->add($json);
+    $app->get('/api/auth/google', [AuthController::class, 'googleStart']);
+    $app->get('/api/auth/google/callback', [AuthController::class, 'googleCallback']);
     $app->post('/api/auth/password', [AuthController::class, 'password'])
         ->add($json);
     $app->post('/api/auth/register', [AuthController::class, 'register'])

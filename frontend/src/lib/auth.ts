@@ -1,5 +1,5 @@
 import { apiFetch, parseApiData, parseApiError } from './api';
-import { messageForAuthCode, messageForPasswordCode, messageForRegisterCode } from './authErrors';
+import { messageForPasswordCode, messageForRegisterCode } from './authErrors';
 
 export type Identity = { provider: string };
 
@@ -71,33 +71,9 @@ export async function fetchMe(fetcher: typeof fetch = fetch): Promise<MeResult> 
   }
 }
 
-export async function signInWithGoogle(
-  idToken: string,
-  timezone: string,
-  fetcher: typeof fetch = fetch,
-): Promise<SignInResult> {
-  try {
-    const { status, body } = await apiFetch(
-      '/api/auth/google',
-      {
-        method: 'POST',
-        body: JSON.stringify({ id_token: idToken, timezone }),
-      },
-      fetcher,
-    );
-    if (status !== 200) {
-      const error = parseApiError(body);
-      const code = error?.code ?? 'invalid_token';
-      return { ok: false, code, message: messageForAuthCode(code) };
-    }
-    const me = parseMe(body);
-    if (me === null) {
-      return { ok: false, code: 'invalid_token', message: messageForAuthCode('invalid_token') };
-    }
-    return { ok: true, me };
-  } catch {
-    return { ok: false, code: 'invalid_token', message: messageForAuthCode('invalid_token') };
-  }
+export function googleStartUrl(timezone: string): string {
+  const params = new URLSearchParams({ timezone });
+  return `/api/auth/google?${params.toString()}`;
 }
 
 export async function signInWithPassword(

@@ -9,7 +9,3 @@ vi.mock('$app/state', () => ({
   page: { url: new URL('http://localhost/') },
 }));
 
-vi.mock('$env/dynamic/public', () => ({
-  env: { PUBLIC_GOOGLE_CLIENT_ID: 'test-google-client-id' },
-}));
-

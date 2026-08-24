@@ -39,7 +39,7 @@ final class SecurityHeadersTest extends TestCase
         $this->assertSame('DENY', $response->getHeaderLine('X-Frame-Options'));
         $csp = $response->getHeaderLine('Content-Security-Policy');
         $this->assertStringContainsString("default-src 'self'", $csp);
-        $this->assertStringContainsString('https://accounts.google.com', $csp);
+        $this->assertStringNotContainsString('https://accounts.google.com', $csp);
         $this->assertStringContainsString("frame-ancestors 'none'", $csp);
         $this->assertSame(SecurityHeaders::CSP, $csp);
     }

@@ -5,6 +5,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "league/oauth2-google": "^4.0",
         "php-di/php-di": "^7.0",
         "slim/psr7": "^1.7",
         "slim/slim": "^4.14",

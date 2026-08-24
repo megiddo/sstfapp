@@ -26,7 +26,7 @@ use Sstf\Api\Infrastructure\Sqlite\Migrator;
 use Sstf\Api\Infrastructure\Sqlite\UserDbFactory;
 use Sstf\Api\Infrastructure\Sqlite\UserDirectory;
 use Sstf\Api\Services\AuthService;
-use Sstf\Api\Tests\Fakes\FakeGoogleIdTokenVerifier;
+use Sstf\Api\Tests\Fakes\FakeGoogleOAuthClient;
 
 #[CoversClass(AuthService::class)]
 #[CoversClass(UserDirectory::class)]
@@ -51,11 +51,9 @@ final class AuthServiceTest extends TestCase
 
     public function testSignInCreatesAccountAndMeLoadsIt(): void
     {
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('Ada@Example.COM', true, 'sub-1'));
-        $service = $this->service($verifier);
+        $service = $this->service();
 
-        $result = $service->signInWithGoogle('tok', 'America/Chicago');
+        $result = $service->signInWithGoogle(FakeGoogleOAuthClient::user('Ada@Example.COM', true, 'sub-1'), 'America/Chicago');
         $this->assertSame('Ada@Example.COM', $result['account']->email);
         $this->assertSame('America/Chicago', $result['account']->timezone);
         $this->assertSame(['google'], $result['account']->providers);
@@ -71,43 +69,30 @@ final class AuthServiceTest extends TestCase
 
     public function testUnverifiedEmailIsRejected(): void
     {
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('a@b.com', false));
-        $service = $this->service($verifier);
+        $service = $this->service();
 
         $this->expectException(EmailUnverifiedException::class);
-        $service->signInWithGoogle('tok', null);
+        $service->signInWithGoogle(FakeGoogleOAuthClient::user('a@b.com', false), null);
     }
 
-    public function testInvalidTokenAndInvalidEmail(): void
+    public function testInvalidEmailIsRejected(): void
     {
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $service = $this->service($verifier);
-
-        try {
-            $service->signInWithGoogle('missing', null);
-            $this->fail('missing token');
-        } catch (InvalidGoogleIdTokenException) {
-        }
-
-        $verifier->willVerify('bad-email', FakeGoogleIdTokenVerifier::user('no-at-sign', true));
+        $service = $this->service();
         $this->expectException(InvalidGoogleIdTokenException::class);
-        $service->signInWithGoogle('bad-email', null);
+        $service->signInWithGoogle(FakeGoogleOAuthClient::user('no-at-sign', true), null);
     }
 
     public function testMeMissingAccountIsUnauthenticated(): void
     {
-        $service = $this->service(new FakeGoogleIdTokenVerifier());
+        $service = $this->service();
         $this->expectException(UnauthenticatedException::class);
         $service->me('0123456789abcdef0123456789abcdef');
     }
 
     public function testUpdateMeTimezoneAndUnit(): void
     {
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('me@example.com'));
-        $service = $this->service($verifier);
-        $service->signInWithGoogle('tok', 'America/Chicago');
+        $service = $this->service();
+        $service->signInWithGoogle(FakeGoogleOAuthClient::user('me@example.com'), 'America/Chicago');
         $hash = RepoKey::google('me@example.com')->hash();
 
         $tz = $service->updateMe($hash, 'Europe/Paris', null);
@@ -129,10 +114,8 @@ final class AuthServiceTest extends TestCase
 
     public function testUpdateMeRejectsInvalidTimezoneAndUnit(): void
     {
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('bad@example.com'));
-        $service = $this->service($verifier);
-        $service->signInWithGoogle('tok', 'UTC');
+        $service = $this->service();
+        $service->signInWithGoogle(FakeGoogleOAuthClient::user('bad@example.com'), 'UTC');
         $hash = RepoKey::google('bad@example.com')->hash();
 
         try {
@@ -153,14 +136,14 @@ final class AuthServiceTest extends TestCase
 
     public function testUpdateMeMissingAccountIsUnauthenticated(): void
     {
-        $service = $this->service(new FakeGoogleIdTokenVerifier());
+        $service = $this->service();
         $this->expectException(UnauthenticatedException::class);
         $service->updateMe('0123456789abcdef0123456789abcdef', 'UTC', 'kg');
     }
 
     public function testRegisterThenGoogleCreatesSeparateRepos(): void
     {
-        $service = $this->service(new FakeGoogleIdTokenVerifier());
+        $service = $this->service();
         $created = $service->registerWithPassword('New@Example.COM', 'starter-pass', 'America/Chicago');
         $this->assertSame('New@Example.COM', $created['account']->email);
         $this->assertSame(['password'], $created['account']->providers);
@@ -176,10 +159,8 @@ final class AuthServiceTest extends TestCase
         $this->assertSame('New@Example.COM', $login['account']->email);
         $this->assertSame(['password'], $login['account']->providers);
 
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $verifier->willVerify('g', FakeGoogleIdTokenVerifier::user('New@Example.COM', true, 'sub-n'));
-        $googleService = $this->service($verifier);
-        $google = $googleService->signInWithGoogle('g', 'Europe/Paris');
+        $googleService = $this->service();
+        $google = $googleService->signInWithGoogle(FakeGoogleOAuthClient::user('New@Example.COM', true, 'sub-n'), 'Europe/Paris');
         $this->assertSame(['google'], $google['account']->providers);
         $this->assertSame('Europe/Paris', $google['account']->timezone);
         $googleHash = RepoKey::google('New@Example.COM')->hash();
@@ -190,7 +171,7 @@ final class AuthServiceTest extends TestCase
 
     public function testPasswordLoginRejectsUnknownWrongAndInvalidEmail(): void
     {
-        $service = $this->service(new FakeGoogleIdTokenVerifier());
+        $service = $this->service();
         $service->registerWithPassword('ok@example.com', 'right-pass', null);
 
         try {
@@ -217,7 +198,7 @@ final class AuthServiceTest extends TestCase
 
     public function testRegisterRejectsEmptyPasswordInvalidEmailAndExistingFile(): void
     {
-        $service = $this->service(new FakeGoogleIdTokenVerifier());
+        $service = $this->service();
         try {
             $service->registerWithPassword('a@b.com', '', null);
             $this->fail('empty password');
@@ -237,10 +218,8 @@ final class AuthServiceTest extends TestCase
 
     public function testSetAndChangePassword(): void
     {
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('pw@example.com'));
-        $service = $this->service($verifier);
-        $service->signInWithGoogle('tok', 'UTC');
+        $service = $this->service();
+        $service->signInWithGoogle(FakeGoogleOAuthClient::user('pw@example.com'), 'UTC');
         $hash = RepoKey::google('pw@example.com')->hash();
 
         $set = $service->updateMe($hash, null, null, 'first-pass', null);
@@ -279,13 +258,11 @@ final class AuthServiceTest extends TestCase
 
     public function testSetPasswordOnGoogleFailsWhenPasswordUsernameIsTaken(): void
     {
-        $service = $this->service(new FakeGoogleIdTokenVerifier());
+        $service = $this->service();
         $service->registerWithPassword('taken@example.com', 'pass-one', null);
 
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('taken@example.com'));
-        $googleService = $this->service($verifier);
-        $googleService->signInWithGoogle('tok', 'UTC');
+        $googleService = $this->service();
+        $googleService->signInWithGoogle(FakeGoogleOAuthClient::user('taken@example.com'), 'UTC');
         $hash = RepoKey::google('taken@example.com')->hash();
 
         $this->expectException(AccountExistsException::class);
@@ -294,18 +271,14 @@ final class AuthServiceTest extends TestCase
 
     public function testGoogleOnlyPasswordLoginFails(): void
     {
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('gop@example.com'));
-        $service = $this->service($verifier);
-        $service->signInWithGoogle('tok', null);
+        $service = $this->service();
+        $service->signInWithGoogle(FakeGoogleOAuthClient::user('gop@example.com'), null);
         $this->expectException(InvalidCredentialsException::class);
         $service->signInWithPassword('gop@example.com', 'anything');
     }
 
     public function testDirectoryPasswordHelpersOnMissingAndExistingFiles(): void
     {
-        $verifier = new FakeGoogleIdTokenVerifier();
-        $verifier->willVerify('tok', FakeGoogleIdTokenVerifier::user('dir@example.com'));
         $migrator = new Migrator();
         $root = dirname(__DIR__, 3);
         $users = new UserDbFactory($this->tmp . '/users', $migrator, $root . '/migrations/user');
@@ -317,8 +290,8 @@ final class AuthServiceTest extends TestCase
         $this->assertNull($directory->passwordHash($missing));
         $this->assertNull($directory->setPasswordHash($missing, 'hash'));
 
-        $service = $this->service($verifier);
-        $service->signInWithGoogle('tok', 'UTC');
+        $service = $this->service();
+        $service->signInWithGoogle(FakeGoogleOAuthClient::user('dir@example.com'), 'UTC');
         $hash = RepoKey::google('dir@example.com')->hash();
         $this->assertTrue($directory->userFileExists($hash));
         $this->assertNull($directory->passwordHash($hash));
@@ -339,7 +312,7 @@ final class AuthServiceTest extends TestCase
         $this->assertNull($directory->passwordHash($hash));
     }
 
-    private function service(FakeGoogleIdTokenVerifier $verifier): AuthService
+    private function service(): AuthService
     {
         $migrator = new Migrator();
         $root = dirname(__DIR__, 3);
@@ -353,7 +326,6 @@ final class AuthServiceTest extends TestCase
         );
 
         return new AuthService(
-            $verifier,
             $directory,
             $sessions,
             [

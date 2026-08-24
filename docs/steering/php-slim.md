@@ -30,7 +30,7 @@ sstfapp/
 │   │   ├── Http/               # JsonResponder, JsonErrorHandler, Controllers, Middleware
 │   │   ├── Domain/             # EmailKey, UsernameKey, RepoKey, timezone, Google claims, exceptions
 │   │   ├── Services/
-│   │   └── Infrastructure/     # Sqlite, GoogleIdTokenVerifierInterface, file sessions
+│   │   └── Infrastructure/     # Sqlite, GoogleOAuthClientInterface, file sessions
 │   ├── migrations/global/      # numbered *.sql
 │   ├── migrations/user/
 │   ├── tests/Unit
@@ -56,7 +56,7 @@ sstfapp/
 | SQLite | WAL, `foreign_keys=ON`, user files `0600`, data dir outside `public/` |
 | User files | Filename allowlist `/^[a-f0-9]{32}$/` on `UserDbFactory` |
 | Session | Server-side file store keyed to `email_hash`; cookie `sstf_session` is `HttpOnly`, `SameSite=Lax`, `Secure` when `APP_ENV=production` (override with `SESSION_SECURE`). HMAC with `SESSION_SECRET`. Never put raw email in a non-HttpOnly cookie. |
-| Google tokens | Inject `GoogleIdTokenVerifierInterface`. Production verifies RS256 against Google certs (`aud`, `iss`, `exp`). Tests use a fake — never hit the Google network. |
+| Google OAuth | Inject `GoogleOAuthClientInterface`. Production uses `league/oauth2-google` (authorization code). Tests use a fake — never hit the Google network. |
 | CSRF | Same-site cookie + require `Content-Type: application/json` on mutating `/api/auth/*` JSON routes. |
 | Config | `settings.php` reads `$_ENV`; Dotenv loads repo-root or `backend/.env` |
 | Errors | Slim `ErrorMiddleware` + `JsonErrorHandler`; no error logs when `APP_ENV=testing` |

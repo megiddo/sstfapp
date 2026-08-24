@@ -17,8 +17,8 @@ use Slim\App;
 use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
 use Sstf\Api\Domain\RepoKey;
-use Sstf\Api\Infrastructure\Google\GoogleIdTokenVerifierInterface;
-use Sstf\Api\Tests\Fakes\FakeGoogleIdTokenVerifier;
+use Sstf\Api\Infrastructure\Google\GoogleOAuthClientInterface;
+use Sstf\Api\Tests\Fakes\FakeGoogleOAuthClient;
 
 $backend = dirname(__DIR__);
 require $backend . '/vendor/autoload.php';
@@ -30,6 +30,8 @@ $_ENV['DATA_PATH'] = $tmp;
 $_ENV['SESSION_PATH'] = $tmp . '/sessions';
 $_ENV['SESSION_SECRET'] = 'testing-session-secret-key';
 $_ENV['GOOGLE_CLIENT_ID'] = 'test-google-client-id.apps.googleusercontent.com';
+$_ENV['GOOGLE_CLIENT_SECRET'] = 'test-google-client-secret';
+$_ENV['GOOGLE_REDIRECT_URI'] = 'http://localhost:5173/api/auth/google/callback';
 $_ENV['APP_ENV'] = 'testing';
 $_ENV['AUTH_RATE_LIMIT_MAX'] = '10000';
 $_ENV['AUTH_RATE_LIMIT_WINDOW'] = '60';
@@ -37,12 +39,14 @@ putenv('DATA_PATH=' . $tmp);
 putenv('SESSION_PATH=' . $tmp . '/sessions');
 putenv('SESSION_SECRET=testing-session-secret-key');
 putenv('GOOGLE_CLIENT_ID=' . $_ENV['GOOGLE_CLIENT_ID']);
+putenv('GOOGLE_CLIENT_SECRET=test-google-client-secret');
+putenv('GOOGLE_REDIRECT_URI=http://localhost:5173/api/auth/google/callback');
 putenv('APP_ENV=testing');
 putenv('AUTH_RATE_LIMIT_MAX=10000');
 putenv('AUTH_RATE_LIMIT_WINDOW=60');
 
 $cookies = [];
-$verifier = new FakeGoogleIdTokenVerifier();
+$oauth = new FakeGoogleOAuthClient();
 
 try {
     /** @var App $app */
@@ -51,17 +55,29 @@ try {
     if (!$container instanceof Container) {
         fail('App container missing');
     }
-    $container->set(GoogleIdTokenVerifierInterface::class, $verifier);
+    $container->set(GoogleOAuthClientInterface::class, $oauth);
 
     $email = 'smoke@example.com';
-    $token = 'smoke-id-token';
-    $verifier->willVerify($token, FakeGoogleIdTokenVerifier::user($email));
+    $oauth->willReturnUser('smoke-code', FakeGoogleOAuthClient::user($email));
 
-    $login = request($app, $cookies, 'POST', '/api/auth/google', [
-        'id_token' => $token,
-        'timezone' => 'America/Chicago',
-    ]);
-    assertStatus($login, 200, 'provision');
+    $start = request($app, $cookies, 'GET', '/api/auth/google?timezone=' . rawurlencode('America/Chicago'));
+    assertStatus($start, 302, 'google-start');
+    $location = $start->getHeaderLine('Location');
+    $query = parse_url($location, PHP_URL_QUERY);
+    if (!is_string($query)) {
+        fail('Google start missing Location query');
+    }
+    parse_str($query, $params);
+    if (!isset($params['state']) || !is_string($params['state'])) {
+        fail('Google start missing state');
+    }
+    $login = request(
+        $app,
+        $cookies,
+        'GET',
+        '/api/auth/google/callback?code=smoke-code&state=' . rawurlencode($params['state']),
+    );
+    assertStatus($login, 302, 'provision');
 
     $schedule = jsonData(request($app, $cookies, 'POST', '/api/schedules', ['name' => 'Hypertrophy']));
     $set = jsonData(request($app, $cookies, 'POST', '/api/schedules/' . $schedule['id'] . '/sets', [
@@ -127,6 +143,11 @@ function request(App $app, array &$cookies, string $method, string $uri, ?array 
     $request = (new ServerRequestFactory())->createServerRequest($method, $uri, [
         'REMOTE_ADDR' => '127.0.0.1',
     ]);
+    $queryString = parse_url($uri, PHP_URL_QUERY);
+    if (is_string($queryString) && $queryString !== '') {
+        parse_str($queryString, $query);
+        $request = $request->withQueryParams($query);
+    }
     $request = $request->withCookieParams($cookies);
     if ($cookies !== []) {
         $parts = [];

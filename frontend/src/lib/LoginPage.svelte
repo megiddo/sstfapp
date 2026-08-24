@@ -1,80 +1,35 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { registerWithPassword, signInWithGoogle, signInWithPassword } from './auth';
+  import { registerWithPassword, googleStartUrl, signInWithPassword } from './auth';
   import { AUTH_ERROR_PASSWORD_MISMATCH, messageForAuthCode } from './authErrors';
-  import {
-    GIS_SCRIPT_SRC,
-    googleIdentityFromWindow,
-    loadGoogleIdentityScript,
-    renderOfficialGoogleButton,
-  } from './googleIdentity';
   import PhoneShell from './PhoneShell.svelte';
   import { browserTimeZone } from './timezone';
 
   type Mode = 'signin' | 'register';
 
   let {
-    clientId,
-    loadGis = loadGoogleIdentityScript,
-    readGis = googleIdentityFromWindow,
+    oauthError = '',
     timeZone = browserTimeZone,
-    googleSignIn = signInWithGoogle,
     passwordSignIn = signInWithPassword,
     passwordRegister = registerWithPassword,
     navigate,
   }: {
-    clientId: string;
-    loadGis?: typeof loadGoogleIdentityScript;
-    readGis?: typeof googleIdentityFromWindow;
+    oauthError?: string;
     timeZone?: () => string;
-    googleSignIn?: typeof signInWithGoogle;
     passwordSignIn?: typeof signInWithPassword;
     passwordRegister?: typeof registerWithPassword;
     navigate?: (path: string) => Promise<void> | void;
   } = $props();
 
-  let error = $state('');
+  let error = $state(oauthError !== '' ? messageForAuthCode(oauthError) : '');
   let username = $state('');
   let password = $state('');
   let confirmPassword = $state('');
   let mode = $state<Mode>('signin');
   let submitting = $state(false);
-  let buttonHost: HTMLDivElement | undefined = $state();
-
-  onMount(() => {
-    void setup();
-  });
-
-  async function setup() {
-    if (clientId === '') {
-      return;
-    }
-    try {
-      await loadGis(document, GIS_SCRIPT_SRC);
-      const gis = readGis(window);
-      if (gis === null || buttonHost === undefined) {
-        error = messageForAuthCode('invalid_token');
-        return;
-      }
-      renderOfficialGoogleButton(buttonHost, clientId, handleCredential, gis);
-    } catch {
-      error = messageForAuthCode('invalid_token');
-    }
-  }
 
   function setMode(next: Mode) {
     mode = next;
     error = '';
-  }
-
-  async function handleCredential(credential: string) {
-    error = '';
-    const result = await googleSignIn(credential, timeZone());
-    if (!result.ok) {
-      error = result.message;
-      return;
-    }
-    await navigate?.('/');
   }
 
   async function handlePassword(event: SubmitEvent) {
@@ -105,11 +60,7 @@
 </script>
 
 <PhoneShell title="Single Set" subtitle="Single set to failure.">
-  {#if clientId === ''}
-    <p class="google-unavailable" data-testid="google-unavailable">Google sign-in isn't configured.</p>
-  {:else}
-    <div class="google-slot" data-testid="google-button" bind:this={buttonHost}></div>
-  {/if}
+  <a class="google" data-testid="google-button" href={googleStartUrl(timeZone())}>Continue with Google</a>
   <p class="divider">or</p>
   <div class="mode" role="tablist" aria-label="Username and password">
     <button
@@ -174,15 +125,19 @@
 </PhoneShell>
 
 <style>
-  .google-slot {
+  .google {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     min-height: 48px;
     margin-top: 1.5rem;
-  }
-
-  .google-unavailable {
-    color: #a3a3a3;
-    margin: 1.5rem 0 0;
-    line-height: 1.4;
+    border: 1px solid #333;
+    border-radius: 10px;
+    background: #1c1c1c;
+    color: #f5f5f5;
+    font-size: 16px;
+    font-weight: 600;
+    text-decoration: none;
   }
 
   .divider {

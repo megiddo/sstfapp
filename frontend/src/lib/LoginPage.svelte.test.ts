@@ -1,21 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import LoginPage from './LoginPage.svelte';
-import type { GoogleIdentity } from './googleIdentity';
+import { AUTH_ERROR_EMAIL_UNVERIFIED, AUTH_ERROR_GOOGLE_FAILED } from './authErrors';
 
 describe('LoginPage', () => {
-  it('renders SSTF copy and Google button container', async () => {
-    const gis: GoogleIdentity = {
-      initialize: vi.fn(),
-      renderButton: vi.fn(),
-      prompt: vi.fn(),
-    };
-
+  it('renders SSTF copy and a Google OAuth link', () => {
     render(LoginPage, {
       props: {
-        clientId: 'client-id',
-        loadGis: async () => document.createElement('script'),
-        readGis: () => gis,
         timeZone: () => 'America/Chicago',
         navigate: vi.fn(),
       },
@@ -23,20 +14,20 @@ describe('LoginPage', () => {
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Single Set');
     expect(screen.getByText('Single set to failure.')).toBeInTheDocument();
-    expect(screen.getByTestId('google-button')).toBeInTheDocument();
+    const google = screen.getByTestId('google-button');
+    expect(google).toHaveTextContent('Continue with Google');
+    expect(google).toHaveAttribute(
+      'href',
+      '/api/auth/google?timezone=' + encodeURIComponent('America/Chicago'),
+    );
     expect(screen.getByLabelText('Username')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Sign in' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Create account' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
-
-    await waitFor(() => {
-      expect(gis.renderButton).toHaveBeenCalled();
-    });
-    expect(gis.prompt).not.toHaveBeenCalled();
   });
 
-  it('lets password registration work when Google is not configured', async () => {
+  it('lets password registration work alongside Google', async () => {
     const navigate = vi.fn();
     const passwordRegister = vi.fn(async () => ({
       ok: true as const,
@@ -49,16 +40,14 @@ describe('LoginPage', () => {
     }));
     render(LoginPage, {
       props: {
-        clientId: '',
         timeZone: () => 'America/Chicago',
         passwordRegister,
         navigate,
       },
     });
 
-    expect(screen.getByTestId('google-unavailable')).toHaveTextContent("Google sign-in isn't configured.");
+    expect(screen.getByTestId('google-button')).toBeInTheDocument();
     expect(screen.queryByTestId('login-error')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('google-button')).not.toBeInTheDocument();
 
     await fireEvent.click(screen.getByRole('tab', { name: 'Create account' }));
     await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'new@example.com' } });
@@ -72,123 +61,24 @@ describe('LoginPage', () => {
     });
   });
 
-  it('shows Google sign-in failed when GIS cannot load', async () => {
+  it('shows Google callback errors from the query string', () => {
     render(LoginPage, {
       props: {
-        clientId: 'client-id',
-        loadGis: async () => {
-          throw new Error('blocked');
-        },
-        readGis: () => null,
+        oauthError: 'google',
         navigate: vi.fn(),
       },
     });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('login-error')).toHaveTextContent('Google sign-in failed');
-    });
+    expect(screen.getByTestId('login-error')).toHaveTextContent(AUTH_ERROR_GOOGLE_FAILED);
   });
 
-  it('shows Google sign-in failed when GIS is missing on window', async () => {
+  it('shows Email not verified from the OAuth callback', () => {
     render(LoginPage, {
       props: {
-        clientId: 'client-id',
-        loadGis: async () => document.createElement('script'),
-        readGis: () => null,
+        oauthError: 'email_unverified',
         navigate: vi.fn(),
       },
     });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('login-error')).toHaveTextContent('Google sign-in failed');
-    });
-  });
-
-  it('shows Email not verified from the API', async () => {
-    const initialize = vi.fn();
-    const gis: GoogleIdentity = {
-      initialize,
-      renderButton: vi.fn(),
-      prompt: vi.fn(),
-    };
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        json: async () => ({ error: { code: 'email_unverified', message: 'Email not verified' } }),
-      }),
-    );
-
-    render(LoginPage, {
-      props: {
-        clientId: 'client-id',
-        loadGis: async () => document.createElement('script'),
-        readGis: () => gis,
-        timeZone: () => 'UTC',
-        navigate: vi.fn(),
-      },
-    });
-
-    await waitFor(() => {
-      expect(initialize).toHaveBeenCalled();
-    });
-    const callback = initialize.mock.calls[0]?.[0].callback as (r: { credential: string }) => void;
-    await callback({ credential: 'id-token' });
-
-    await waitFor(() => {
-      expect(screen.getByTestId('login-error')).toHaveTextContent('Email not verified');
-    });
-
-    vi.unstubAllGlobals();
-  });
-
-  it('navigates home after a successful Google login', async () => {
-    const initialize = vi.fn();
-    const navigate = vi.fn();
-    const gis: GoogleIdentity = {
-      initialize,
-      renderButton: vi.fn(),
-    };
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        json: async () => ({
-          data: {
-            email: 'a@b.com',
-            timezone: 'UTC',
-            weight_unit: 'lb',
-            identities: [{ provider: 'google' }],
-          },
-        }),
-      }),
-    );
-
-    render(LoginPage, {
-      props: {
-        clientId: 'client-id',
-        loadGis: async () => document.createElement('script'),
-        readGis: () => gis,
-        timeZone: () => 'America/Chicago',
-        navigate,
-      },
-    });
-
-    await waitFor(() => {
-      expect(initialize).toHaveBeenCalled();
-    });
-    const callback = initialize.mock.calls[0]?.[0].callback as (r: { credential: string }) => void;
-    await callback({ credential: 'id-token' });
-
-    await waitFor(() => {
-      expect(navigate).toHaveBeenCalledWith('/');
-    });
-
-    vi.unstubAllGlobals();
+    expect(screen.getByTestId('login-error')).toHaveTextContent(AUTH_ERROR_EMAIL_UNVERIFIED);
   });
 
   it('signs in with username and password', async () => {
@@ -206,16 +96,8 @@ describe('LoginPage', () => {
         },
       };
     });
-    const gis: GoogleIdentity = {
-      initialize: vi.fn(),
-      renderButton: vi.fn(),
-      prompt: vi.fn(),
-    };
     render(LoginPage, {
       props: {
-        clientId: 'client-id',
-        loadGis: async () => document.createElement('script'),
-        readGis: () => gis,
         passwordSignIn,
         navigate,
       },
@@ -244,16 +126,8 @@ describe('LoginPage', () => {
         code: 'rate_limited',
         message: 'Too many attempts',
       });
-    const gis: GoogleIdentity = {
-      initialize: vi.fn(),
-      renderButton: vi.fn(),
-      prompt: vi.fn(),
-    };
     render(LoginPage, {
       props: {
-        clientId: 'client-id',
-        loadGis: async () => document.createElement('script'),
-        readGis: () => gis,
         passwordSignIn,
         navigate: vi.fn(),
       },
@@ -273,8 +147,10 @@ describe('LoginPage', () => {
   });
 
   it('does not submit password login twice while the first request is in flight', async () => {
-    let release: (value: { ok: true; me: { email: string; timezone: string; weight_unit: 'lb'; identities: { provider: string }[] } }) => void =
-      () => undefined;
+    let release: (value: {
+      ok: true;
+      me: { email: string; timezone: string; weight_unit: 'lb'; identities: { provider: string }[] };
+    }) => void = () => undefined;
     const passwordSignIn = vi.fn(
       () =>
         new Promise<{
@@ -284,16 +160,8 @@ describe('LoginPage', () => {
           release = resolve;
         }),
     );
-    const gis: GoogleIdentity = {
-      initialize: vi.fn(),
-      renderButton: vi.fn(),
-      prompt: vi.fn(),
-    };
     render(LoginPage, {
       props: {
-        clientId: 'client-id',
-        loadGis: async () => document.createElement('script'),
-        readGis: () => gis,
         passwordSignIn,
         navigate: vi.fn(),
       },
@@ -317,7 +185,6 @@ describe('LoginPage', () => {
     const passwordRegister = vi.fn();
     render(LoginPage, {
       props: {
-        clientId: '',
         passwordRegister,
         navigate: vi.fn(),
       },
@@ -343,7 +210,6 @@ describe('LoginPage', () => {
     }));
     render(LoginPage, {
       props: {
-        clientId: '',
         passwordRegister,
         navigate: vi.fn(),
       },

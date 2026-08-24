@@ -18,7 +18,7 @@ use Sstf\Api\Http\Middleware\RequireJsonContentType;
 use Sstf\Api\Http\Middleware\SessionAuth;
 use Sstf\Api\Infrastructure\Sqlite\UserDirectory;
 use Sstf\Api\Services\AuthService;
-use Sstf\Api\Tests\Fakes\FakeGoogleIdTokenVerifier;
+use Sstf\Api\Tests\Fakes\FakeGoogleOAuthClient;
 use Sstf\Api\Tests\HttpTestCase;
 
 #[CoversClass(AccountExistsException::class)]
@@ -152,13 +152,11 @@ final class AuthPasswordTest extends HttpTestCase
         $this->assertSame(PASSWORD_ARGON2ID, password_get_info($hash)['algo']);
 
         $this->cookies = [];
-        $this->googleVerifier->willVerify('pg-token', FakeGoogleIdTokenVerifier::user($email, true, 'sub-pg'));
-        $google = $this->request('POST', '/api/auth/google', [
-            'id_token' => 'pg-token',
-            'timezone' => 'Europe/Paris',
-        ]);
-        $this->assertSame(200, $google->getStatusCode());
-        $me = $this->json($google)['data'];
+        $this->googleOAuth->willReturnUser('pg-code', FakeGoogleOAuthClient::user($email, true, 'sub-pg'));
+        $google = $this->completeGoogleOAuth('pg-code', 'Europe/Paris');
+        $this->assertSame(302, $google->getStatusCode());
+        $this->assertSame('/', $google->getHeaderLine('Location'));
+        $me = $this->json($this->request('GET', '/api/me'))['data'];
         $this->assertSame($email, $me['email']);
         $this->assertSame('Europe/Paris', $me['timezone']);
         $this->assertArrayNotHasKey('password_hash', $me);
@@ -183,14 +181,13 @@ final class AuthPasswordTest extends HttpTestCase
         $this->assertNotNull($container);
         $container->get(AuthService::class)->registerWithPassword($email, 'secret-pass', null);
 
-        $this->googleVerifier->willVerify(
-            'unv-token',
-            FakeGoogleIdTokenVerifier::user($email, false, 'sub-unv'),
+        $this->googleOAuth->willReturnUser(
+            'unv-code',
+            FakeGoogleOAuthClient::user($email, false, 'sub-unv'),
         );
-        $response = $this->request('POST', '/api/auth/google', ['id_token' => 'unv-token']);
-        $this->assertSame(401, $response->getStatusCode());
-        $this->assertSame('email_unverified', $this->json($response)['error']['code']);
-        $this->assertSame('Email not verified', $this->json($response)['error']['message']);
+        $response = $this->completeGoogleOAuth('unv-code');
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertSame('/login?error=email_unverified', $response->getHeaderLine('Location'));
 
         $pdo = new PDO('sqlite:' . $this->userDbPath($email, 'password'));
         $googleCount = (int) $pdo->query("SELECT COUNT(*) FROM identities WHERE provider = 'google'")->fetchColumn();
@@ -468,10 +465,8 @@ final class AuthPasswordTest extends HttpTestCase
         $this->assertStringNotContainsString('Google client ID', (string) $created->getBody());
         $this->assertFileExists($this->userDbPath($email, 'password'));
 
-        $google = $this->request('POST', '/api/auth/google', ['id_token' => 'anything']);
-        $this->assertSame(401, $google->getStatusCode());
-        $this->assertSame('invalid_token', $this->json($google)['error']['code']);
-        $this->assertSame('Google sign-in failed', $this->json($google)['error']['message']);
-        $this->assertStringNotContainsString('client ID', (string) $google->getBody());
+        $google = $this->request('GET', '/api/auth/google/callback?code=anything&state=nope');
+        $this->assertSame(302, $google->getStatusCode());
+        $this->assertSame('/login?error=google', $google->getHeaderLine('Location'));
     }
 }
