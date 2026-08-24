@@ -16,9 +16,12 @@ describe('LoginPage', () => {
     expect(screen.getByText('Single set to failure.')).toBeInTheDocument();
     const google = screen.getByTestId('google-button');
     expect(google).toHaveTextContent('Continue with Google');
-    expect(google).toHaveAttribute(
-      'href',
-      '/api/auth/google?timezone=' + encodeURIComponent('America/Chicago'),
+    expect(google).toContainElement(screen.getByTestId('google-icon'));
+    expect(google.compareDocumentPosition(screen.getByRole('tablist')) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(google.getAttribute('href')).toMatch(
+      /\/api\/auth\/google\?timezone=America%2FChicago$/,
     );
     expect(google).toHaveAttribute('rel', 'external');
     expect(google).toHaveAttribute('data-sveltekit-reload', '');
