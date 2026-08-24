@@ -8,12 +8,16 @@
   import { DAY_NAMES, formatMinutes, snapMinutesToQuarter, todayDayOfWeek } from './format';
   import {
     copySetsOntoDay,
+    copySetsPreservingDays,
     createSet,
     deleteSet,
     groupTrainingSetsByDay,
+    listSchedules,
     listScheduleSets,
     patchSet,
     replaceSetExercises,
+    type CopyMode,
+    type Schedule,
     type TrainingSet,
   } from './schedules';
 
@@ -23,6 +27,7 @@
     initialDay = null,
     today = todayDayOfWeek,
     loadSets = listScheduleSets,
+    loadSchedules = listSchedules,
     makeSet = createSet,
     saveSet = patchSet,
     removeSet = deleteSet,
@@ -33,6 +38,7 @@
     initialDay?: number | null;
     today?: () => number;
     loadSets?: typeof listScheduleSets;
+    loadSchedules?: typeof listSchedules;
     makeSet?: typeof createSet;
     saveSet?: typeof patchSet;
     removeSet?: typeof deleteSet;
@@ -48,6 +54,10 @@
   let pickerFor = $state<'new' | number | null>(null);
   let removeId = $state<number | null>(null);
   let copyOpen = $state(false);
+  let schedules: Schedule[] = $state([]);
+  let copySourceId = $state(0);
+  let copySourceSets: TrainingSet[] = $state([]);
+  let copySourceLoading = $state(false);
 
   const daySets = $derived(sets.filter((set) => set.day_of_week === selectedDay));
   const overviewGroups = $derived(groupTrainingSetsByDay(sets, true));
@@ -126,25 +136,61 @@
     void handleTime(pickerFor, minutes);
   }
 
-  async function handleCopy(sources: TrainingSet[]) {
+  async function handleCopy(sources: TrainingSet[], mode: CopyMode = 'day') {
     copyOpen = false;
     if (sources.length === 0) {
       return;
     }
-    const result = await copySetsOntoDay(
-      scheduleId,
-      selectedDay,
-      sources,
-      daySets.length,
-      makeSet,
-      saveExercises,
-    );
+    const result =
+      mode === 'schedule'
+        ? await copySetsPreservingDays(scheduleId, sources, sets, makeSet, saveExercises)
+        : await copySetsOntoDay(
+            scheduleId,
+            selectedDay,
+            sources,
+            daySets.length,
+            makeSet,
+            saveExercises,
+          );
     if (!result.ok) {
       error = result.message;
       return;
     }
     error = '';
     await refresh();
+  }
+
+  async function openCopy() {
+    copySourceId = scheduleId;
+    copySourceSets = sets;
+    copySourceLoading = false;
+    copyOpen = true;
+    const listed = await loadSchedules();
+    if (listed.ok) {
+      schedules = listed.schedules;
+    }
+  }
+
+  async function handleCopyScheduleChange(id: number) {
+    copySourceId = id;
+    if (id === scheduleId) {
+      copySourceSets = sets;
+      copySourceLoading = false;
+      return;
+    }
+    copySourceLoading = true;
+    copySourceSets = [];
+    const result = await loadSets(id);
+    if (copySourceId !== id) {
+      return;
+    }
+    copySourceLoading = false;
+    if (!result.ok) {
+      error = result.message;
+      copySourceSets = [];
+      return;
+    }
+    copySourceSets = result.sets;
   }
 
   async function handleRemove(id: number) {
@@ -210,7 +256,7 @@
   {:else}
   <DayChips selected={selectedDay} onSelect={(day) => (selectedDay = day)} />
 
-  <button type="button" class="copy" onclick={() => (copyOpen = true)}>Copy from day or set</button>
+  <button type="button" class="copy" onclick={() => void openCopy()}>Copy from day or set</button>
 
   {#if daySets.length === 0}
     <EmptyState title="No sets on this day yet." />
@@ -275,9 +321,13 @@
 
 {#if copyOpen}
   <CopyDaySetSheet
-    sets={sets}
+    {schedules}
+    sourceScheduleId={copySourceId}
+    sets={copySourceSets}
+    sourceLoading={copySourceLoading}
     targetDay={selectedDay}
-    onCopy={(sources) => void handleCopy(sources)}
+    onScheduleChange={(id) => void handleCopyScheduleChange(id)}
+    onCopy={(sources, mode) => void handleCopy(sources, mode)}
     onClose={() => (copyOpen = false)}
   />
 {/if}

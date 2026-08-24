@@ -1,51 +1,92 @@
 <script lang="ts">
   import { DAY_NAMES, formatMinutes } from './format';
-  import { defaultCopySourceDay, type TrainingSet } from './schedules';
+  import {
+    defaultCopySourceDay,
+    groupTrainingSetsByDay,
+    type CopyMode,
+    type Schedule,
+    type TrainingSet,
+  } from './schedules';
 
   let {
+    schedules = [],
+    sourceScheduleId = 0,
     sets,
+    sourceLoading = false,
     targetDay,
+    onScheduleChange,
     onCopy,
     onClose,
   }: {
+    schedules?: Schedule[];
+    sourceScheduleId?: number;
     sets: TrainingSet[];
+    sourceLoading?: boolean;
     targetDay: number;
-    onCopy: (sources: TrainingSet[]) => void;
+    onScheduleChange?: (scheduleId: number) => void;
+    onCopy: (sources: TrainingSet[], mode: CopyMode) => void;
     onClose: () => void;
   } = $props();
 
-  let sourceDay = $state(defaultCopySourceDay(sets, targetDay));
+  let sourceDay = $state(String(defaultCopySourceDay(sets, targetDay)));
   let sourceSetId = $state('');
 
+  $effect(() => {
+    void sourceScheduleId;
+    void sourceLoading;
+    if (sourceLoading) {
+      return;
+    }
+    sourceDay = String(defaultCopySourceDay(sets, targetDay));
+    sourceSetId = '';
+  });
+
+  const wholeSchedule = $derived(sourceDay === 'all');
+  const sourceDayNumber = $derived(wholeSchedule ? null : Number(sourceDay));
   const sourceDaySets = $derived(
-    sets
-      .filter((set) => set.day_of_week === sourceDay)
-      .slice()
-      .sort(
-        (left, right) =>
-          left.start_minutes - right.start_minutes || left.sort_order - right.sort_order || left.id - right.id,
-      ),
+    sourceDayNumber === null
+      ? []
+      : sets
+          .filter((set) => set.day_of_week === sourceDayNumber)
+          .slice()
+          .sort(
+            (left, right) =>
+              left.start_minutes - right.start_minutes || left.sort_order - right.sort_order || left.id - right.id,
+          ),
   );
   const selectedSet = $derived(
     sourceDaySets.find((set) => String(set.id) === String(sourceSetId)) ?? null,
   );
-  const copyLabel = $derived(selectedSet === null ? 'Copy Day to Today' : 'Copy Set to Today');
+  const allSourceSets = $derived(groupTrainingSetsByDay(sets).flatMap((group) => group.sets));
+  const copyLabel = $derived(
+    wholeSchedule ? 'Copy Schedule' : selectedSet === null ? 'Copy Day to Today' : 'Copy Set to Today',
+  );
+  const copyDisabled = $derived(
+    sourceLoading || (wholeSchedule ? sets.length === 0 : sourceDaySets.length === 0),
+  );
+
+  function handleScheduleChange(event: Event) {
+    onScheduleChange?.(Number((event.currentTarget as HTMLSelectElement).value));
+  }
 
   function handleDayChange(event: Event) {
-    const value = Number((event.currentTarget as HTMLSelectElement).value);
-    sourceDay = value;
+    sourceDay = (event.currentTarget as HTMLSelectElement).value;
     sourceSetId = '';
   }
 
   function handleCopy() {
-    if (sourceDaySets.length === 0) {
+    if (copyDisabled) {
+      return;
+    }
+    if (wholeSchedule) {
+      onCopy(allSourceSets, 'schedule');
       return;
     }
     if (selectedSet !== null) {
-      onCopy([selectedSet]);
+      onCopy([selectedSet], 'set');
       return;
     }
-    onCopy(sourceDaySets);
+    onCopy(sourceDaySets, 'day');
   }
 </script>
 
@@ -54,27 +95,44 @@
   <div class="sheet" role="dialog" aria-label="Copy onto this day">
     <div class="handle" aria-hidden="true"></div>
     <p class="title">Copy onto this day</p>
+    {#if schedules.length > 1}
+      <label>
+        Schedule
+        <select aria-label="Schedule" value={sourceScheduleId} onchange={handleScheduleChange}>
+          {#each schedules as schedule (schedule.id)}
+            <option value={schedule.id}>{schedule.name}</option>
+          {/each}
+        </select>
+      </label>
+    {/if}
     <label>
       Day
       <select aria-label="Day" value={sourceDay} onchange={handleDayChange}>
+        <option value="all">Whole schedule</option>
         {#each DAY_NAMES as name, day (day)}
-          <option value={day}>{name}</option>
+          <option value={String(day)}>{name}</option>
         {/each}
       </select>
     </label>
-    <label>
-      Set
-      <select aria-label="Set" bind:value={sourceSetId}>
-        <option value="">Choose a set</option>
-        {#each sourceDaySets as set (set.id)}
-          <option value={String(set.id)}>{set.name} · {formatMinutes(set.start_minutes)}</option>
-        {/each}
-      </select>
-    </label>
-    {#if sourceDaySets.length === 0}
+    {#if !wholeSchedule}
+      <label>
+        Set
+        <select aria-label="Set" bind:value={sourceSetId}>
+          <option value="">Choose a set</option>
+          {#each sourceDaySets as set (set.id)}
+            <option value={String(set.id)}>{set.name} · {formatMinutes(set.start_minutes)}</option>
+          {/each}
+        </select>
+      </label>
+    {/if}
+    {#if sourceLoading}
+      <p class="empty">Loading sets…</p>
+    {:else if wholeSchedule && sets.length === 0}
+      <p class="empty">No sets in this schedule to copy.</p>
+    {:else if !wholeSchedule && sourceDaySets.length === 0}
       <p class="empty">No sets on this day to copy.</p>
     {/if}
-    <button type="button" class="confirm" disabled={sourceDaySets.length === 0} onclick={handleCopy}>
+    <button type="button" class="confirm" disabled={copyDisabled} onclick={handleCopy}>
       {copyLabel}
     </button>
   </div>

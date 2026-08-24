@@ -8,10 +8,12 @@
   import { DAY_NAMES, formatMinutes } from './format';
   import {
     catalogIdsFromSet,
+    listSchedules,
     listScheduleSets,
     moveExercise,
     removeExerciseAt,
     replaceSetExercises,
+    type Schedule,
     type SetExercise,
     type TrainingSet,
   } from './schedules';
@@ -21,6 +23,7 @@
     setId,
     navigate,
     loadSets = listScheduleSets,
+    loadSchedules = listSchedules,
     saveExercises = replaceSetExercises,
     searchExercises = listExercises,
     loadSuggested = listSuggested,
@@ -30,6 +33,7 @@
     setId: number;
     navigate?: (path: string) => Promise<void> | void;
     loadSets?: typeof listScheduleSets;
+    loadSchedules?: typeof listSchedules;
     saveExercises?: typeof replaceSetExercises;
     searchExercises?: typeof listExercises;
     loadSuggested?: typeof listSuggested;
@@ -46,8 +50,13 @@
   let adding = $state(false);
   let copyOpen = $state(false);
   let pendingCopy: TrainingSet | null = $state(null);
+  let schedules: Schedule[] = $state([]);
+  let copySourceId = $state(0);
+  let copySourceSets: TrainingSet[] = $state([]);
+  let copySourceLoading = $state(false);
 
   const otherSets = $derived(sets.filter((set) => set.id !== setId));
+  const copySheetSets = $derived(copySourceId === scheduleId ? otherSets : copySourceSets);
 
   $effect(() => {
     void scheduleId;
@@ -136,6 +145,39 @@
     void persist(ids);
   }
 
+  async function openCopy() {
+    copySourceId = scheduleId;
+    copySourceSets = otherSets;
+    copySourceLoading = false;
+    copyOpen = true;
+    const listed = await loadSchedules();
+    if (listed.ok) {
+      schedules = listed.schedules;
+    }
+  }
+
+  async function handleCopyScheduleChange(id: number) {
+    copySourceId = id;
+    if (id === scheduleId) {
+      copySourceSets = otherSets;
+      copySourceLoading = false;
+      return;
+    }
+    copySourceLoading = true;
+    copySourceSets = [];
+    const result = await loadSets(id);
+    if (copySourceId !== id) {
+      return;
+    }
+    copySourceLoading = false;
+    if (!result.ok) {
+      error = result.message;
+      copySourceSets = [];
+      return;
+    }
+    copySourceSets = result.sets;
+  }
+
   async function confirmCopy() {
     if (pendingCopy === null) {
       return;
@@ -202,7 +244,7 @@
     ‹ Week
   </button>
 
-  <button type="button" class="copy" onclick={() => (copyOpen = true)}>Copy from set</button>
+  <button type="button" class="copy" onclick={() => void openCopy()}>Copy from set</button>
 
   {#if error !== ''}
     <p class="error" role="alert">{error}</p>
@@ -258,7 +300,11 @@
 
 <CopySetSheet
   open={copyOpen}
-  sets={otherSets}
+  {schedules}
+  sourceScheduleId={copySourceId}
+  sets={copySheetSets}
+  sourceLoading={copySourceLoading}
+  onScheduleChange={(id) => void handleCopyScheduleChange(id)}
   onSelect={applyCopy}
   onClose={() => (copyOpen = false)}
 />

@@ -28,6 +28,8 @@ export type TrainingSet = {
 
 export type ApiFail = { ok: false; status: number; code: string; message: string };
 
+export type CopyMode = 'day' | 'set' | 'schedule';
+
 function fail(status: number, body: unknown): ApiFail {
   const error = parseApiError(body);
   return {
@@ -464,6 +466,59 @@ export async function copySetsOntoDay(
     }
   }
   return { ok: true };
+}
+
+export function copiedScheduleName(name: string): string {
+  const trimmed = name.trim();
+  return trimmed === '' ? 'Schedule copy' : `${trimmed} copy`;
+}
+
+export async function copySetsPreservingDays(
+  scheduleId: number,
+  sources: TrainingSet[],
+  existing: TrainingSet[],
+  makeSet: typeof createSet,
+  saveExercises: typeof replaceSetExercises,
+): Promise<{ ok: true } | ApiFail> {
+  for (const group of groupTrainingSetsByDay(sources)) {
+    const start = existing.filter((set) => set.day_of_week === group.day).length;
+    const result = await copySetsOntoDay(
+      scheduleId,
+      group.day,
+      group.sets,
+      start,
+      makeSet,
+      saveExercises,
+    );
+    if (!result.ok) {
+      return result;
+    }
+  }
+  return { ok: true };
+}
+
+export async function duplicateSchedule(
+  sourceName: string,
+  sourceSets: TrainingSet[],
+  makeSchedule: typeof createSchedule,
+  makeSet: typeof createSet,
+  saveExercises: typeof replaceSetExercises,
+): Promise<{ ok: true; schedule: Schedule } | ApiFail> {
+  const created = await makeSchedule(copiedScheduleName(sourceName));
+  if (!created.ok) {
+    return created;
+  }
+  const copied = await copySetsPreservingDays(
+    created.schedule.id,
+    sourceSets,
+    [],
+    makeSet,
+    saveExercises,
+  );
+  if (!copied.ok) {
+    return copied;
+  }
+  return created;
 }
 
 export function moveExercise(ids: number[], index: number, direction: -1 | 1): number[] {
