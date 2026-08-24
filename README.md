@@ -121,11 +121,15 @@ Do not rename the file to a different hash. A different Google email or a passwo
 1. In [Google Cloud Console](https://console.cloud.google.com/) create (or pick) a project.
 2. APIs & Services → Credentials → Create credentials → **OAuth client ID**.
 3. Application type: **Web application**.
-4. Authorized JavaScript origins:
-   - `http://localhost:5173` (Compose Vite)
-   - `http://localhost:27180` if you hit the API origin directly
+4. Authorized JavaScript origins (scheme + host + port, no path):
+   - `http://localhost:5173`
+   - `http://127.0.0.1:5173` if you open the app that way
    - your production HTTPS origin when you deploy
-5. Authorized redirect URIs are not required for the GIS button (ID token to `/api/auth/google`). Add them only if you later use a redirect flow.
+5. Authorized redirect URIs (Console requires at least one; GIS may fall back to the current page):
+   - `http://localhost:5173`
+   - `http://localhost:5173/login`
+   - `http://127.0.0.1:5173` and `http://127.0.0.1:5173/login` if you use `127.0.0.1`
+   Do not add a trailing slash. Do not use the API port (`27180`); Google sends the browser back to the SPA, not Slim.
 6. Copy the client ID into `.env` as both `GOOGLE_CLIENT_ID` and `PUBLIC_GOOGLE_CLIENT_ID`.
 
 The login page loads `https://accounts.google.com` for the official button. Keep that origin in the CSP.
