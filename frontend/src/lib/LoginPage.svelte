@@ -104,7 +104,7 @@
   }
 </script>
 
-<PhoneShell title="SSTF" subtitle="Single set to failure.">
+<PhoneShell title="Single Set" subtitle="Single set to failure.">
   {#if clientId === ''}
     <p class="google-unavailable" data-testid="google-unavailable">Google sign-in isn't configured.</p>
   {:else}

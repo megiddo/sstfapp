@@ -18,5 +18,6 @@ describe('app.html device meta', () => {
     expect(html).toContain('rel="manifest"');
     expect(html).toContain('manifest.webmanifest');
     expect(html).toContain('apple-touch-icon');
+    expect(html).toContain('<title>Single Set</title>');
   });
 });

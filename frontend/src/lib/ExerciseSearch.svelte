@@ -2,7 +2,7 @@
   import type { Exercise } from './exercises';
 
   let {
-    query,
+    query = $bindable(),
     results,
     onQuery,
     onPick,
@@ -40,7 +40,7 @@
     Search catalog
     <input
       type="search"
-      value={query}
+      bind:value={query}
       placeholder="Bench, squat…"
       autocomplete="off"
       enterkeyhint="search"

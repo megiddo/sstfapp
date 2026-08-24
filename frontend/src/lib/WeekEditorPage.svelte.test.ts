@@ -294,4 +294,53 @@ describe('WeekEditorPage', () => {
       expect(screen.getByText('No sets on this day yet.')).toBeInTheDocument();
     });
   });
+
+  it('shows a whole-week overview and can open a day or set', async () => {
+    const navigate = vi.fn();
+    const morning: TrainingSet = {
+      ...evening,
+      id: 10,
+      name: 'Morning',
+      day_of_week: 1,
+      start_minutes: 420,
+      exercises: [],
+    };
+    render(WeekEditorPage, {
+      props: {
+        scheduleId: 1,
+        navigate,
+        today: () => 3,
+        loadSets: async () => ({ ok: true as const, sets: [evening, morning] }),
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Wednesday' })).toHaveAttribute('aria-selected', 'true');
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
+    expect(screen.getByTestId('week-overview')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Overview');
+    expect(screen.getByText('Sunday')).toBeInTheDocument();
+    expect(screen.getByText('Bench Press, Barbell Row')).toBeInTheDocument();
+    expect(screen.getByText('No exercises')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: /Morning/ }));
+    expect(navigate).toHaveBeenCalledWith('/schedules/1/sets/10');
+    await fireEvent.click(screen.getByRole('button', { name: 'Monday' }));
+    expect(screen.getByRole('tab', { name: 'Monday' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Week');
+  });
+
+  it('opens on the requested weekday', async () => {
+    render(WeekEditorPage, {
+      props: {
+        scheduleId: 1,
+        initialDay: 1,
+        today: () => 3,
+        loadSets: async () => ({ ok: true as const, sets: [evening] }),
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Monday' })).toHaveAttribute('aria-selected', 'true');
+    });
+    expect(screen.getByText('No sets on this day yet.')).toBeInTheDocument();
+  });
 });

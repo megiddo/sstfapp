@@ -7,6 +7,10 @@
   let { children } = $props();
 </script>
 
+<svelte:head>
+  <title>Single Set</title>
+</svelte:head>
+
 <AuthApp pathname={page.url.pathname} navigate={goto}>
   {@render children()}
 </AuthApp>

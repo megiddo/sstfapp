@@ -17,6 +17,7 @@ import {
   parseIsoDay,
   parseNonNegativeInt,
   parseNonNegativeNumber,
+  parseDayQuery,
   parseSetQuery,
   quarterHourOptions,
   snapMinutesToQuarter,
@@ -125,6 +126,16 @@ describe('format', () => {
     expect(parseSetQuery('0')).toBeNull();
     expect(parseSetQuery('abc')).toBeNull();
     expect(parseSetQuery('12')).toBe(12);
+    expect(parseDayQuery(null)).toBeNull();
+    expect(parseDayQuery(undefined)).toBeNull();
+    expect(parseDayQuery('')).toBeNull();
+    expect(parseDayQuery('7')).toBeNull();
+    expect(parseDayQuery('-1')).toBeNull();
+    expect(parseDayQuery('3.0')).toBeNull();
+    expect(parseDayQuery('Wed')).toBeNull();
+    expect(parseDayQuery('0')).toBe(0);
+    expect(parseDayQuery('3')).toBe(3);
+    expect(parseDayQuery('6')).toBe(6);
     expect(parseNonNegativeNumber('')).toBeNull();
     expect(parseNonNegativeNumber('185')).toBe(185);
     expect(parseNonNegativeNumber('187.5')).toBe(187.5);
