@@ -418,4 +418,113 @@ describe('WeekEditorPage', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Could not copy set');
     });
   });
+
+  it('copies a day or whole schedule from another schedule', async () => {
+    const morning: TrainingSet = {
+      ...evening,
+      id: 10,
+      name: 'Morning',
+      day_of_week: 1,
+      start_minutes: 420,
+      exercises: [
+        {
+          id: 8,
+          global_exercise_id: 3,
+          name: 'Squat',
+          muscle_group: 'Legs',
+          equipment: 'Barbell',
+          sort_order: 0,
+        },
+      ],
+    };
+    const cutEvening: TrainingSet = {
+      ...evening,
+      id: 20,
+      schedule_id: 2,
+      name: 'Cut evening',
+      day_of_week: 4,
+      start_minutes: 1140,
+      exercises: [
+        {
+          id: 12,
+          global_exercise_id: 7,
+          name: 'Deadlift',
+          muscle_group: 'Back',
+          equipment: 'Barbell',
+          sort_order: 0,
+        },
+      ],
+    };
+    const makeSet = vi.fn(async () => ({
+      ok: true as const,
+      set: { ...evening, id: 40, day_of_week: 3, exercises: [] },
+    }));
+    const saveExercises = vi.fn(async () => ({ ok: true as const, set: evening }));
+    const loadSets = vi.fn(async (id: number) => {
+      if (id === 2) {
+        return { ok: true as const, sets: [cutEvening] };
+      }
+      return { ok: true as const, sets: [evening, morning] };
+    });
+    render(WeekEditorPage, {
+      props: {
+        scheduleId: 1,
+        today: () => 3,
+        loadSets,
+        loadSchedules: async () => ({
+          ok: true as const,
+          schedules: [
+            { id: 1, name: 'Hypertrophy', is_active: true, set_count: 2 },
+            { id: 2, name: 'Cut', is_active: false, set_count: 1 },
+          ],
+        }),
+        makeSet,
+        saveExercises,
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copy from day or set' })).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy from day or set' }));
+    await waitFor(() => {
+      expect(screen.getByLabelText('Schedule')).toHaveValue('1');
+    });
+    await fireEvent.change(screen.getByLabelText('Schedule'), { target: { value: '2' } });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Day')).toHaveValue('4');
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy Day to Today' }));
+    await waitFor(() => {
+      expect(makeSet).toHaveBeenCalledWith(1, {
+        name: 'Cut evening',
+        day_of_week: 3,
+        start_minutes: 1140,
+        sort_order: 1,
+      });
+      expect(saveExercises).toHaveBeenCalledWith(40, [7]);
+    });
+
+    makeSet.mockClear();
+    saveExercises.mockClear();
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy from day or set' }));
+    await waitFor(() => {
+      expect(screen.getByLabelText('Schedule')).toBeInTheDocument();
+    });
+    await fireEvent.change(screen.getByLabelText('Day'), { target: { value: 'all' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy Schedule' }));
+    await waitFor(() => {
+      expect(makeSet).toHaveBeenNthCalledWith(1, 1, {
+        name: 'Morning',
+        day_of_week: 1,
+        start_minutes: 420,
+        sort_order: 1,
+      });
+      expect(makeSet).toHaveBeenNthCalledWith(2, 1, {
+        name: 'Evening',
+        day_of_week: 3,
+        start_minutes: 1080,
+        sort_order: 1,
+      });
+    });
+  });
 });

@@ -61,4 +61,37 @@ describe('CopySetSheet', () => {
     });
     expect(screen.getByText('No other sets to copy from.')).toBeInTheDocument();
   });
+
+  it('lets the user pick another schedule and shows loading', async () => {
+    const onScheduleChange = vi.fn();
+    const hypertrophy = { id: 1, name: 'Hypertrophy', is_active: true, set_count: 2 };
+    const cut = { id: 2, name: 'Cut', is_active: false, set_count: 1 };
+    const { rerender } = render(CopySetSheet, {
+      props: {
+        open: true,
+        schedules: [hypertrophy, cut],
+        sourceScheduleId: 1,
+        sets: [evening, morning],
+        onScheduleChange,
+        onSelect: vi.fn(),
+        onClose: vi.fn(),
+      },
+    });
+    expect(screen.getByLabelText('Schedule')).toHaveValue('1');
+    await fireEvent.change(screen.getByLabelText('Schedule'), { target: { value: '2' } });
+    expect(onScheduleChange).toHaveBeenCalledWith(2);
+
+    rerender({
+      open: true,
+      schedules: [hypertrophy, cut],
+      sourceScheduleId: 2,
+      sets: [],
+      sourceLoading: true,
+      onScheduleChange,
+      onSelect: vi.fn(),
+      onClose: vi.fn(),
+    });
+    expect(screen.getByText('Loading sets…')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Monday' })).not.toBeInTheDocument();
+  });
 });

@@ -154,4 +154,87 @@ describe('ScheduleListPage', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Cannot archive');
     });
   });
+
+  it('copies a schedule into a new one', async () => {
+    const navigate = vi.fn();
+    const loadSets = vi.fn(async () => ({
+      ok: true as const,
+      sets: [
+        {
+          id: 9,
+          schedule_id: 1,
+          name: 'Evening',
+          day_of_week: 3,
+          start_minutes: 1080,
+          sort_order: 0,
+          exercises: [
+            {
+              id: 4,
+              global_exercise_id: 1,
+              name: 'Bench Press',
+              muscle_group: 'Chest',
+              equipment: 'Barbell',
+              sort_order: 0,
+            },
+          ],
+        },
+      ],
+    }));
+    const makeSchedule = vi.fn(async (name: string) => ({
+      ok: true as const,
+      schedule: { id: 8, name, is_active: false, set_count: 0 },
+    }));
+    const makeSet = vi.fn(async () => ({
+      ok: true as const,
+      set: {
+        id: 40,
+        schedule_id: 8,
+        name: 'Evening',
+        day_of_week: 3,
+        start_minutes: 1080,
+        sort_order: 0,
+        exercises: [],
+      },
+    }));
+    const saveExercises = vi.fn(async () => ({
+      ok: true as const,
+      set: {
+        id: 40,
+        schedule_id: 8,
+        name: 'Evening',
+        day_of_week: 3,
+        start_minutes: 1080,
+        sort_order: 0,
+        exercises: [],
+      },
+    }));
+    render(ScheduleListPage, {
+      props: {
+        navigate,
+        loadSchedules: async () => ({ ok: true as const, schedules: [hypertrophy, cut] }),
+        loadSets,
+        makeSchedule,
+        makeSet,
+        saveExercises,
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getAllByRole('button', { name: 'Copy' })).toHaveLength(2);
+    });
+    await fireEvent.click(screen.getAllByRole('button', { name: 'Copy' })[0]);
+    expect(screen.getByTestId('confirm-sheet')).toBeInTheDocument();
+    await fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Copy schedule' }));
+    await waitFor(() => {
+      expect(loadSets).toHaveBeenCalledWith(1);
+      expect(makeSchedule).toHaveBeenCalledWith('Hypertrophy copy');
+      expect(makeSet).toHaveBeenCalledWith(8, {
+        name: 'Evening',
+        day_of_week: 3,
+        start_minutes: 1080,
+        sort_order: 0,
+      });
+      expect(saveExercises).toHaveBeenCalledWith(40, [1]);
+      expect(navigate).toHaveBeenCalledWith('/schedules/8');
+    });
+  });
 });

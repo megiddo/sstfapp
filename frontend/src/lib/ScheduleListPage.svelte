@@ -7,20 +7,30 @@
     activateSchedule,
     archiveSchedule,
     createSchedule,
+    createSet,
+    duplicateSchedule,
     listSchedules,
+    listScheduleSets,
+    replaceSetExercises,
     type Schedule,
   } from './schedules';
 
   let {
     navigate,
     loadSchedules = listSchedules,
+    loadSets = listScheduleSets,
     makeSchedule = createSchedule,
+    makeSet = createSet,
+    saveExercises = replaceSetExercises,
     makeActive = activateSchedule,
     makeArchived = archiveSchedule,
   }: {
     navigate?: (path: string) => Promise<void> | void;
     loadSchedules?: typeof listSchedules;
+    loadSets?: typeof listScheduleSets;
     makeSchedule?: typeof createSchedule;
+    makeSet?: typeof createSet;
+    saveExercises?: typeof replaceSetExercises;
     makeActive?: typeof activateSchedule;
     makeArchived?: typeof archiveSchedule;
   } = $props();
@@ -30,6 +40,7 @@
   let error = $state('');
   let loaded = $state(false);
   let archiveId = $state<number | null>(null);
+  let copyId = $state<number | null>(null);
 
   $effect(() => {
     void refresh();
@@ -74,6 +85,35 @@
     }
     await refresh();
   }
+
+  async function handleCopy(id: number) {
+    const source = schedules.find((schedule) => schedule.id === id);
+    copyId = null;
+    if (source === undefined) {
+      return;
+    }
+    const setsResult = await loadSets(id);
+    if (!setsResult.ok) {
+      error = setsResult.message;
+      return;
+    }
+    const result = await duplicateSchedule(
+      source.name,
+      setsResult.sets,
+      makeSchedule,
+      makeSet,
+      saveExercises,
+    );
+    if (!result.ok) {
+      error = result.message;
+      return;
+    }
+    if (navigate) {
+      await navigate(`/schedules/${result.schedule.id}`);
+      return;
+    }
+    await refresh();
+  }
 </script>
 
 <PhoneShell title="Schedules" subtitle="Weekly plans.">
@@ -107,6 +147,9 @@
               Activate
             </button>
           {/if}
+          <button type="button" class="secondary" onclick={() => (copyId = schedule.id)}>
+            Copy
+          </button>
           <button type="button" class="secondary" onclick={() => (archiveId = schedule.id)}>
             Archive
           </button>
@@ -129,6 +172,20 @@
     <button type="submit">New schedule</button>
   </form>
 </PhoneShell>
+
+{#if copyId !== null}
+  <ConfirmSheet
+    title="Copy this schedule?"
+    message="Creates a new schedule with the same days and sets."
+    confirmLabel="Copy schedule"
+    onConfirm={() => {
+      if (copyId !== null) {
+        void handleCopy(copyId);
+      }
+    }}
+    onCancel={() => (copyId = null)}
+  />
+{/if}
 
 {#if archiveId !== null}
   <ConfirmSheet

@@ -6,8 +6,11 @@ import {
   createSet,
   deleteSet,
   catalogIdsFromSet,
+  copiedScheduleName,
   copySetsOntoDay,
+  copySetsPreservingDays,
   defaultCopySourceDay,
+  duplicateSchedule,
   groupTrainingSetsByDay,
   listScheduleSets,
   listSchedules,
@@ -385,6 +388,81 @@ describe('schedule API helpers', () => {
     await expect(copySetsOntoDay(1, 3, [morning], 0, makeSet, saveExercises)).resolves.toMatchObject({
       ok: false,
       message: 'Could not copy exercises',
+    });
+  });
+
+  it('copies sets onto their original weekdays and duplicates a schedule', async () => {
+    const morning = {
+      ...evening,
+      id: 10,
+      name: 'Morning',
+      day_of_week: 1,
+      start_minutes: 420,
+      exercises: [{ ...evening.exercises[0], id: 8, global_exercise_id: 3, name: 'Squat' }],
+    };
+    expect(copiedScheduleName('Hypertrophy')).toBe('Hypertrophy copy');
+    expect(copiedScheduleName('  ')).toBe('Schedule copy');
+
+    const makeSet = vi.fn(async (scheduleId: number, input: { name: string; day_of_week: number; sort_order?: number }) => ({
+      ok: true as const,
+      set: {
+        ...evening,
+        id: 80 + (input.sort_order ?? 0),
+        schedule_id: scheduleId,
+        name: input.name,
+        day_of_week: input.day_of_week,
+        exercises: [],
+      },
+    }));
+    const saveExercises = vi.fn(async (setId: number) => ({
+      ok: true as const,
+      set: { ...evening, id: setId, exercises: [] },
+    }));
+    await expect(
+      copySetsPreservingDays(2, [evening, morning], [evening], makeSet, saveExercises),
+    ).resolves.toEqual({ ok: true });
+    expect(makeSet).toHaveBeenNthCalledWith(1, 2, {
+      name: 'Morning',
+      day_of_week: 1,
+      start_minutes: 420,
+      sort_order: 0,
+    });
+    expect(makeSet).toHaveBeenNthCalledWith(2, 2, {
+      name: 'Evening',
+      day_of_week: 3,
+      start_minutes: 1080,
+      sort_order: 1,
+    });
+    expect(saveExercises).toHaveBeenCalledWith(80, [3]);
+    expect(saveExercises).toHaveBeenCalledWith(81, [1]);
+
+    makeSet.mockClear();
+    saveExercises.mockClear();
+    const makeSchedule = vi.fn(async (name: string) => ({
+      ok: true as const,
+      schedule: { id: 9, name, is_active: false, set_count: 0 },
+    }));
+    await expect(duplicateSchedule('Cut', [morning], makeSchedule, makeSet, saveExercises)).resolves.toEqual({
+      ok: true,
+      schedule: { id: 9, name: 'Cut copy', is_active: false, set_count: 0 },
+    });
+    expect(makeSchedule).toHaveBeenCalledWith('Cut copy');
+    expect(makeSet).toHaveBeenCalledWith(9, {
+      name: 'Morning',
+      day_of_week: 1,
+      start_minutes: 420,
+      sort_order: 0,
+    });
+
+    makeSchedule.mockResolvedValueOnce({
+      ok: false as const,
+      status: 400,
+      code: 'invalid_request',
+      message: 'Schedule name is required',
+    });
+    await expect(duplicateSchedule('Cut', [morning], makeSchedule, makeSet, saveExercises)).resolves.toMatchObject({
+      ok: false,
+      message: 'Schedule name is required',
     });
   });
 });

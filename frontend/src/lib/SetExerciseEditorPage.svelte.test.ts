@@ -353,4 +353,86 @@ describe('SetExerciseEditorPage', () => {
     });
     expect(screen.getByText('Squat')).toBeInTheDocument();
   });
+
+  it('copies exercises from a set on another schedule', async () => {
+    const morning: TrainingSet = {
+      ...evening,
+      id: 10,
+      name: 'Morning',
+      day_of_week: 1,
+      start_minutes: 420,
+      exercises: [],
+    };
+    const cutEvening: TrainingSet = {
+      ...evening,
+      id: 20,
+      schedule_id: 2,
+      name: 'Cut evening',
+      day_of_week: 4,
+      exercises: [
+        {
+          id: 12,
+          global_exercise_id: 7,
+          name: 'Deadlift',
+          muscle_group: 'Back',
+          equipment: 'Barbell',
+          sort_order: 0,
+        },
+      ],
+    };
+    const saveExercises = vi.fn(async (_setId: number, ids: number[]) => ({
+      ok: true as const,
+      set: {
+        ...evening,
+        exercises: ids.map((globalId, index) => ({
+          id: 20 + index,
+          global_exercise_id: globalId,
+          name: globalId === 7 ? 'Deadlift' : 'Other',
+          muscle_group: null,
+          equipment: null,
+          sort_order: index,
+        })),
+      },
+    }));
+    const loadSets = vi.fn(async (id: number) => {
+      if (id === 2) {
+        return { ok: true as const, sets: [cutEvening] };
+      }
+      return { ok: true as const, sets: [evening, morning] };
+    });
+    render(SetExerciseEditorPage, {
+      props: {
+        scheduleId: 1,
+        setId: 9,
+        loadSets,
+        loadSchedules: async () => ({
+          ok: true as const,
+          schedules: [
+            { id: 1, name: 'Hypertrophy', is_active: true, set_count: 2 },
+            { id: 2, name: 'Cut', is_active: false, set_count: 1 },
+          ],
+        }),
+        saveExercises,
+        searchExercises: async () => ({ ok: true as const, exercises: [] }),
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copy from set' })).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy from set' }));
+    await waitFor(() => {
+      expect(screen.getByLabelText('Schedule')).toHaveValue('1');
+    });
+    await fireEvent.change(screen.getByLabelText('Schedule'), { target: { value: '2' } });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Cut evening/ })).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole('button', { name: /Cut evening/ }));
+    expect(screen.getByTestId('confirm-sheet')).toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy exercises' }));
+    await waitFor(() => {
+      expect(saveExercises).toHaveBeenCalledWith(9, [7]);
+    });
+    expect(screen.getByText('Deadlift')).toBeInTheDocument();
+  });
 });
