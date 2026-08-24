@@ -3,6 +3,7 @@
   import { downloadExport, triggerBrowserDownload } from './export';
   import PhoneShell from './PhoneShell.svelte';
   import { timezoneChoices } from './timezone';
+  import { APP_VERSION, formatAppVersion } from './version';
 
   let {
     navigate,
@@ -178,6 +179,8 @@
     <button type="button" class="primary" onclick={() => void handleDownload()}>Download my data</button>
     <button type="button" class="secondary" onclick={() => void handleLogout()}>Log out</button>
   {/if}
+
+  <p class="version" data-testid="app-version">{formatAppVersion(APP_VERSION)}</p>
 </PhoneShell>
 
 <style>
@@ -276,5 +279,12 @@
     border: 1px solid #3a3a3a;
     background: transparent;
     color: #f5f5f5;
+  }
+
+  .version {
+    margin: 2rem 0 0;
+    color: #737373;
+    font-size: 0.85rem;
+    text-align: center;
   }
 </style>

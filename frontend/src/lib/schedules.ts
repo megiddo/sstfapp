@@ -394,6 +394,36 @@ export async function replaceSetExercises(
   }
 }
 
+export function groupTrainingSetsByDay(
+  sets: TrainingSet[],
+  includeEmpty = false,
+): { day: number; sets: TrainingSet[] }[] {
+  const groups: { day: number; sets: TrainingSet[] }[] = [];
+  for (let day = 0; day <= 6; day++) {
+    const daySets = sets
+      .filter((set) => set.day_of_week === day)
+      .slice()
+      .sort(
+        (left, right) =>
+          left.start_minutes - right.start_minutes || left.sort_order - right.sort_order || left.id - right.id,
+      );
+    if (includeEmpty || daySets.length > 0) {
+      groups.push({ day, sets: daySets });
+    }
+  }
+  return groups;
+}
+
+export function catalogIdsFromSet(set: TrainingSet): number[] {
+  const ids: number[] = [];
+  for (const exercise of set.exercises) {
+    if (exercise.global_exercise_id !== null) {
+      ids.push(exercise.global_exercise_id);
+    }
+  }
+  return ids;
+}
+
 export function moveExercise(ids: number[], index: number, direction: -1 | 1): number[] {
   const target = index + direction;
   if (index < 0 || index >= ids.length || target < 0 || target >= ids.length) {

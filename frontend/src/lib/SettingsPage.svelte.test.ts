@@ -35,6 +35,7 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('button', { name: 'Set password' })).toBeInTheDocument();
     expect(screen.getByRole('combobox')).toHaveValue('America/Chicago');
     expect(screen.getByRole('radio', { name: 'Pounds (lb)' })).toBeChecked();
+    expect(screen.getByTestId('app-version')).toHaveTextContent('v0.1.0');
 
     await fireEvent.change(screen.getByRole('combobox'), { target: { value: 'Europe/London' } });
     await waitFor(() => {
@@ -102,6 +103,7 @@ describe('SettingsPage', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Request failed');
     });
     expect(screen.queryByRole('button', { name: 'Download my data' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('app-version')).toHaveTextContent('v0.1.0');
   });
 
   it('surfaces timezone and download errors', async () => {

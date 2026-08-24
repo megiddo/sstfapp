@@ -21,7 +21,7 @@ describe('LoginPage', () => {
       },
     });
 
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('SSTF');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Single Set');
     expect(screen.getByText('Single set to failure.')).toBeInTheDocument();
     expect(screen.getByTestId('google-button')).toBeInTheDocument();
     expect(screen.getByLabelText('Username')).toBeInTheDocument();

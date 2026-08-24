@@ -1,0 +1,13 @@
+---
+description: Bump the displayed app version on every pull request
+alwaysApply: true
+---
+
+# App version
+
+Every pull request must ship a new app version. Settings shows that number at the bottom of the page.
+
+- Source of truth: `frontend/src/lib/version.ts` (`APP_VERSION`) and `frontend/package.json` `version`. Keep them identical. Use semver with no leading `v` (the UI adds `v`).
+- Also update `frontend/package-lock.json` top-level `version` fields to match.
+- Patch (`0.1.0` → `0.1.1`) for small fixes. Minor (`0.2.0`) for user-facing features. Major for breaking changes.
+- Do not reuse a version already on `main`.

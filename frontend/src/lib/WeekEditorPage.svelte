@@ -5,11 +5,12 @@
   import PhoneShell from './PhoneShell.svelte';
   import TimePickerSheet from './TimePickerSheet.svelte';
   import { DAY_NAMES, formatMinutes, snapMinutesToQuarter, todayDayOfWeek } from './format';
-  import { createSet, deleteSet, listScheduleSets, patchSet, type TrainingSet } from './schedules';
+  import { groupTrainingSetsByDay, createSet, deleteSet, listScheduleSets, patchSet, type TrainingSet } from './schedules';
 
   let {
     scheduleId,
     navigate,
+    initialDay = null,
     today = todayDayOfWeek,
     loadSets = listScheduleSets,
     makeSet = createSet,
@@ -18,6 +19,7 @@
   }: {
     scheduleId: number;
     navigate?: (path: string) => Promise<void> | void;
+    initialDay?: number | null;
     today?: () => number;
     loadSets?: typeof listScheduleSets;
     makeSet?: typeof createSet;
@@ -25,7 +27,8 @@
     removeSet?: typeof deleteSet;
   } = $props();
 
-  let selectedDay = $state(today());
+  let selectedDay = $state(initialDay ?? today());
+  let mode = $state<'day' | 'overview'>('day');
   let sets: TrainingSet[] = $state([]);
   let error = $state('');
   let newName = $state('Evening');
@@ -34,6 +37,12 @@
   let removeId = $state<number | null>(null);
 
   const daySets = $derived(sets.filter((set) => set.day_of_week === selectedDay));
+  const overviewGroups = $derived(groupTrainingSetsByDay(sets, true));
+
+  function openDay(day: number) {
+    selectedDay = day;
+    mode = 'day';
+  }
   const pickerMinutes = $derived(
     pickerFor === 'new'
       ? newMinutes
@@ -115,7 +124,12 @@
   }
 </script>
 
-<PhoneShell title="Week" subtitle={DAY_NAMES[selectedDay] ?? ''}>
+<PhoneShell
+  title={mode === 'overview' ? 'Overview' : 'Week'}
+  subtitle={mode === 'overview' ? 'Whole week.' : (DAY_NAMES[selectedDay] ?? '')}
+  actionLabel={mode === 'overview' ? 'Edit day' : 'Overview'}
+  onAction={() => (mode = mode === 'overview' ? 'day' : 'overview')}
+>
   <button type="button" class="back" aria-label="Back" onclick={() => navigate?.('/schedules')}>
     ‹ Schedules
   </button>
@@ -124,6 +138,42 @@
     <p class="error" role="alert">{error}</p>
   {/if}
 
+  {#if mode === 'overview'}
+    <ol class="overview" data-testid="week-overview">
+      {#each overviewGroups as group (group.day)}
+        <li class="overview-day">
+          <button type="button" class="day-heading" onclick={() => openDay(group.day)}>
+            {DAY_NAMES[group.day]}
+          </button>
+          {#if group.sets.length === 0}
+            <p class="rest">No sets</p>
+          {:else}
+            <ul>
+              {#each group.sets as set (set.id)}
+                <li>
+                  <button
+                    type="button"
+                    class="overview-set"
+                    onclick={() => navigate?.(`/schedules/${scheduleId}/sets/${set.id}`)}
+                  >
+                    <span class="overview-name">{set.name}</span>
+                    <span class="overview-meta">{formatMinutes(set.start_minutes)}</span>
+                    <span class="overview-exercises">
+                      {#if set.exercises.length === 0}
+                        No exercises
+                      {:else}
+                        {set.exercises.map((exercise) => exercise.name).join(', ')}
+                      {/if}
+                    </span>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+          {/if}
+        </li>
+      {/each}
+    </ol>
+  {:else}
   <DayChips selected={selectedDay} onSelect={(day) => (selectedDay = day)} />
 
   {#if daySets.length === 0}
@@ -177,6 +227,7 @@
     </button>
     <button type="submit">Add set</button>
   </form>
+  {/if}
 </PhoneShell>
 
 <TimePickerSheet
@@ -213,6 +264,71 @@
 
   .error {
     color: #f0a0a0;
+  }
+
+  .overview {
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .overview-day ul {
+    list-style: none;
+    margin: 0.35rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .day-heading,
+  .overview-set {
+    width: 100%;
+    min-height: 48px;
+    border: 0;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+    padding: 0.55rem 0.85rem;
+  }
+
+  .day-heading {
+    background: transparent;
+    color: #e8a04a;
+    font-weight: 600;
+    padding-left: 0;
+  }
+
+  .overview-set {
+    background: #1c1c1c;
+    color: #f5f5f5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.75rem;
+  }
+
+  .overview-name {
+    font-weight: 600;
+  }
+
+  .overview-meta {
+    color: #a3a3a3;
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .overview-exercises,
+  .rest {
+    width: 100%;
+    color: #a3a3a3;
+    font-size: 0.9rem;
+  }
+
+  .rest {
+    margin: 0.25rem 0 0;
   }
 
   .sets {

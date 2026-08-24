@@ -24,8 +24,10 @@ Single Set to Failure workout tracking app.
 
 ```bash
 cp -n .env.example .env
-docker compose -f docker/compose.dev.yml up --build
+docker compose --env-file .env -f docker/compose.dev.yml up --build
 ```
+
+Put the Google OAuth **client ID** in `.env` as `GOOGLE_CLIENT_ID` and `PUBLIC_GOOGLE_CLIENT_ID`. Recreate the stack after changing `.env` so Vite and Slim pick it up. The Google client secret is not used (GIS sends an ID token).
 
 - SPA: [http://localhost:5173](http://localhost:5173)
 - API (direct): [http://localhost:27180/api/health](http://localhost:27180/api/health)
@@ -39,7 +41,7 @@ Vite proxies `/api` → `http://api:27180` inside Compose (or `http://localhost:
 Set a real `SESSION_SECRET` in `.env`. Build bakes `PUBLIC_GOOGLE_CLIENT_ID` into the SPA.
 
 ```bash
-docker compose -f docker/compose.prod.yml up --build
+docker compose --env-file .env -f docker/compose.prod.yml up --build
 ```
 
 - App (SPA + `/api` on one origin): [http://localhost](http://localhost) (`WEB_PORT` defaults to 80)
@@ -119,18 +121,22 @@ Do not rename the file to a different hash. A different Google email or a passwo
 1. In [Google Cloud Console](https://console.cloud.google.com/) create (or pick) a project.
 2. APIs & Services → Credentials → Create credentials → **OAuth client ID**.
 3. Application type: **Web application**.
-4. Authorized JavaScript origins:
-   - `http://localhost:5173` (Compose Vite)
-   - `http://localhost:27180` if you hit the API origin directly
+4. Authorized JavaScript origins (scheme + host + port, no path):
+   - `http://localhost:5173`
+   - `http://127.0.0.1:5173` if you open the app that way
    - your production HTTPS origin when you deploy
-5. Authorized redirect URIs are not required for the GIS button (ID token to `/api/auth/google`). Add them only if you later use a redirect flow.
+5. Authorized redirect URIs (Console requires at least one; GIS may fall back to the current page):
+   - `http://localhost:5173`
+   - `http://localhost:5173/login`
+   - `http://127.0.0.1:5173` and `http://127.0.0.1:5173/login` if you use `127.0.0.1`
+   Do not add a trailing slash. Do not use the API port (`27180`); Google sends the browser back to the SPA, not Slim.
 6. Copy the client ID into `.env` as both `GOOGLE_CLIENT_ID` and `PUBLIC_GOOGLE_CLIENT_ID`.
 
 The login page loads `https://accounts.google.com` for the official button. Keep that origin in the CSP.
 
 ## Production (SPA + API, same origin)
 
-Preferred: `docker compose -f docker/compose.prod.yml up --build`. nginx serves the built SPA and proxies `/api` to Slim. Host `./data` is the SQLite directory.
+Preferred: `docker compose --env-file .env -f docker/compose.prod.yml up --build`. nginx serves the built SPA and proxies `/api` to Slim. Host `./data` is the SQLite directory.
 
 Without Compose:
 

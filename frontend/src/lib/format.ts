@@ -108,6 +108,16 @@ export function parseSetQuery(value: string | null | undefined): number | null {
   return Number(value);
 }
 
+export function parseDayQuery(value: string | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  if (!/^[0-6]$/.test(value)) {
+    return null;
+  }
+  return Number(value);
+}
+
 export function parseNonNegativeNumber(raw: string): number | null {
   const trimmed = raw.trim();
   if (trimmed === '') {

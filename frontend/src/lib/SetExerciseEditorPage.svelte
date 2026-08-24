@@ -2,9 +2,12 @@
   import ExerciseSearch from './ExerciseSearch.svelte';
   import PhoneShell from './PhoneShell.svelte';
   import SuggestedExercises from './SuggestedExercises.svelte';
+  import ConfirmSheet from './ConfirmSheet.svelte';
+  import CopySetSheet from './CopySetSheet.svelte';
   import { createExercise, listExercises, listSuggested, type Exercise } from './exercises';
   import { DAY_NAMES, formatMinutes } from './format';
   import {
+    catalogIdsFromSet,
     listScheduleSets,
     moveExercise,
     removeExerciseAt,
@@ -34,12 +37,17 @@
   } = $props();
 
   let current: TrainingSet | null = $state(null);
+  let sets: TrainingSet[] = $state([]);
   let query = $state('');
   let results: Exercise[] = $state([]);
   let recent: Exercise[] = $state([]);
   let frequent: Exercise[] = $state([]);
   let error = $state('');
   let adding = $state(false);
+  let copyOpen = $state(false);
+  let pendingCopy: TrainingSet | null = $state(null);
+
+  const otherSets = $derived(sets.filter((set) => set.id !== setId));
 
   $effect(() => {
     void scheduleId;
@@ -61,8 +69,10 @@
     if (!result.ok) {
       error = result.message;
       current = null;
+      sets = [];
       return;
     }
+    sets = result.sets;
     current = result.sets.find((set) => set.id === setId) ?? null;
     if (current === null) {
       error = 'Set not found';
@@ -108,7 +118,31 @@
       return;
     }
     current = result.set;
+    sets = sets.map((set) => (set.id === result.set.id ? result.set : set));
     error = '';
+  }
+
+  function applyCopy(source: TrainingSet) {
+    const ids = catalogIdsFromSet(source);
+    copyOpen = false;
+    if (ids.length === 0) {
+      error = 'That set has no exercises to copy.';
+      return;
+    }
+    if (current !== null && current.exercises.length > 0) {
+      pendingCopy = source;
+      return;
+    }
+    void persist(ids);
+  }
+
+  async function confirmCopy() {
+    if (pendingCopy === null) {
+      return;
+    }
+    const source = pendingCopy;
+    pendingCopy = null;
+    await persist(catalogIdsFromSet(source));
   }
 
   async function handlePick(exercise: Exercise) {
@@ -116,6 +150,7 @@
       return;
     }
     await persist([...idsFrom(current.exercises), exercise.id]);
+    query = '';
   }
 
   async function handleMove(index: number, direction: -1 | 1) {
@@ -159,10 +194,15 @@
     type="button"
     class="back"
     aria-label="Back"
-    onclick={() => navigate?.(`/schedules/${scheduleId}`)}
+    onclick={() => {
+      const day = current?.day_of_week;
+      navigate?.(`/schedules/${scheduleId}${typeof day === 'number' ? `?day=${day}` : ''}`);
+    }}
   >
     ‹ Week
   </button>
+
+  <button type="button" class="copy" onclick={() => (copyOpen = true)}>Copy from set</button>
 
   {#if error !== ''}
     <p class="error" role="alert">{error}</p>
@@ -208,7 +248,7 @@
   {/if}
 
   <ExerciseSearch
-    {query}
+    bind:query
     {results}
     onQuery={(value) => (query = value)}
     onPick={(exercise) => void handlePick(exercise)}
@@ -216,8 +256,26 @@
   />
 </PhoneShell>
 
+<CopySetSheet
+  open={copyOpen}
+  sets={otherSets}
+  onSelect={applyCopy}
+  onClose={() => (copyOpen = false)}
+/>
+
+{#if pendingCopy !== null}
+  <ConfirmSheet
+    title="Replace this set's exercises?"
+    message={`Copy ${pendingCopy.name} (${DAY_NAMES[pendingCopy.day_of_week] ?? 'day'}) onto this set.`}
+    confirmLabel="Copy exercises"
+    onConfirm={() => void confirmCopy()}
+    onCancel={() => (pendingCopy = null)}
+  />
+{/if}
+
 <style>
-  .back {
+  .back,
+  .copy {
     min-height: 48px;
     border: 0;
     background: transparent;
@@ -225,6 +283,10 @@
     padding: 0;
     margin-bottom: 0.75rem;
     cursor: pointer;
+  }
+
+  .copy {
+    display: block;
   }
 
   .error {

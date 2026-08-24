@@ -1,6 +1,6 @@
 {
-  "name": "SSTF",
-  "short_name": "SSTF",
+  "name": "Single Set",
+  "short_name": "Single Set",
   "description": "Single set to failure workout log",
   "start_url": "/",
   "scope": "/",

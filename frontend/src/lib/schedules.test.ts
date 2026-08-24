@@ -5,6 +5,8 @@ import {
   createSchedule,
   createSet,
   deleteSet,
+  catalogIdsFromSet,
+  groupTrainingSetsByDay,
   listScheduleSets,
   listSchedules,
   moveExercise,
@@ -289,5 +291,29 @@ describe('schedule API helpers', () => {
     expect(removeExerciseAt([1, 2, 3], 2)).toEqual([1, 2]);
     expect(removeExerciseAt([1, 2, 3], -1)).toEqual([1, 2, 3]);
     expect(removeExerciseAt([1, 2, 3], 3)).toEqual([1, 2, 3]);
+  });
+
+  it('groups training sets by weekday and collects catalog ids', () => {
+    const morning = {
+      ...evening,
+      id: 10,
+      name: 'Morning',
+      day_of_week: 1,
+      start_minutes: 420,
+      exercises: [
+        { ...evening.exercises[0], id: 8, global_exercise_id: 3, name: 'Squat' },
+        { ...evening.exercises[0], id: 9, global_exercise_id: null, name: 'Custom hold' },
+      ],
+    };
+    const later = { ...evening, id: 11, name: 'Late', start_minutes: 1200, sort_order: 1 };
+    const grouped = groupTrainingSetsByDay([later, evening, morning], true);
+    expect(grouped).toHaveLength(7);
+    expect(grouped[1]?.sets.map((set) => set.id)).toEqual([10]);
+    expect(grouped[3]?.sets.map((set) => set.id)).toEqual([9, 11]);
+    expect(grouped[0]?.sets).toEqual([]);
+    expect(groupTrainingSetsByDay([evening])).toEqual([{ day: 3, sets: [evening] }]);
+    expect(catalogIdsFromSet(evening)).toEqual([1]);
+    expect(catalogIdsFromSet(morning)).toEqual([3]);
+    expect(catalogIdsFromSet({ ...evening, exercises: [] })).toEqual([]);
   });
 });
