@@ -1,11 +1,21 @@
 <script lang="ts">
   import ConfirmSheet from './ConfirmSheet.svelte';
+  import CopyDaySetSheet from './CopyDaySetSheet.svelte';
   import DayChips from './DayChips.svelte';
   import EmptyState from './EmptyState.svelte';
   import PhoneShell from './PhoneShell.svelte';
   import TimePickerSheet from './TimePickerSheet.svelte';
   import { DAY_NAMES, formatMinutes, snapMinutesToQuarter, todayDayOfWeek } from './format';
-  import { groupTrainingSetsByDay, createSet, deleteSet, listScheduleSets, patchSet, type TrainingSet } from './schedules';
+  import {
+    copySetsOntoDay,
+    createSet,
+    deleteSet,
+    groupTrainingSetsByDay,
+    listScheduleSets,
+    patchSet,
+    replaceSetExercises,
+    type TrainingSet,
+  } from './schedules';
 
   let {
     scheduleId,
@@ -16,6 +26,7 @@
     makeSet = createSet,
     saveSet = patchSet,
     removeSet = deleteSet,
+    saveExercises = replaceSetExercises,
   }: {
     scheduleId: number;
     navigate?: (path: string) => Promise<void> | void;
@@ -25,6 +36,7 @@
     makeSet?: typeof createSet;
     saveSet?: typeof patchSet;
     removeSet?: typeof deleteSet;
+    saveExercises?: typeof replaceSetExercises;
   } = $props();
 
   let selectedDay = $state(initialDay ?? today());
@@ -35,6 +47,7 @@
   let newMinutes = $state(1080);
   let pickerFor = $state<'new' | number | null>(null);
   let removeId = $state<number | null>(null);
+  let copyOpen = $state(false);
 
   const daySets = $derived(sets.filter((set) => set.day_of_week === selectedDay));
   const overviewGroups = $derived(groupTrainingSetsByDay(sets, true));
@@ -113,6 +126,27 @@
     void handleTime(pickerFor, minutes);
   }
 
+  async function handleCopy(sources: TrainingSet[]) {
+    copyOpen = false;
+    if (sources.length === 0) {
+      return;
+    }
+    const result = await copySetsOntoDay(
+      scheduleId,
+      selectedDay,
+      sources,
+      daySets.length,
+      makeSet,
+      saveExercises,
+    );
+    if (!result.ok) {
+      error = result.message;
+      return;
+    }
+    error = '';
+    await refresh();
+  }
+
   async function handleRemove(id: number) {
     const result = await removeSet(id);
     removeId = null;
@@ -176,6 +210,8 @@
   {:else}
   <DayChips selected={selectedDay} onSelect={(day) => (selectedDay = day)} />
 
+  <button type="button" class="copy" onclick={() => (copyOpen = true)}>Copy from day or set</button>
+
   {#if daySets.length === 0}
     <EmptyState title="No sets on this day yet." />
   {/if}
@@ -237,6 +273,15 @@
   onClose={() => (pickerFor = null)}
 />
 
+{#if copyOpen}
+  <CopyDaySetSheet
+    sets={sets}
+    targetDay={selectedDay}
+    onCopy={(sources) => void handleCopy(sources)}
+    onClose={() => (copyOpen = false)}
+  />
+{/if}
+
 {#if removeId !== null}
   <ConfirmSheet
     title="Remove this set?"
@@ -252,7 +297,8 @@
 {/if}
 
 <style>
-  .back {
+  .back,
+  .copy {
     min-height: 48px;
     border: 0;
     background: transparent;
@@ -260,6 +306,10 @@
     padding: 0;
     margin-bottom: 0.75rem;
     cursor: pointer;
+  }
+
+  .copy {
+    display: block;
   }
 
   .error {

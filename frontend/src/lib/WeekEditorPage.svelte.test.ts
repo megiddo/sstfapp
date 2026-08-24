@@ -343,4 +343,79 @@ describe('WeekEditorPage', () => {
     });
     expect(screen.getByText('No sets on this day yet.')).toBeInTheDocument();
   });
+
+  it('copies a day or a set onto the selected day', async () => {
+    const morning: TrainingSet = {
+      ...evening,
+      id: 10,
+      name: 'Morning',
+      day_of_week: 1,
+      start_minutes: 420,
+      exercises: [
+        {
+          id: 8,
+          global_exercise_id: 3,
+          name: 'Squat',
+          muscle_group: 'Legs',
+          equipment: 'Barbell',
+          sort_order: 0,
+        },
+      ],
+    };
+    const makeSet = vi.fn(async () => ({
+      ok: true as const,
+      set: { ...evening, id: 40, day_of_week: 3, exercises: [] },
+    }));
+    const saveExercises = vi.fn(async () => ({ ok: true as const, set: evening }));
+    render(WeekEditorPage, {
+      props: {
+        scheduleId: 1,
+        today: () => 3,
+        loadSets: async () => ({ ok: true as const, sets: [evening, morning] }),
+        makeSet,
+        saveExercises,
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Copy from day or set' })).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Overview' }));
+    expect(screen.queryByRole('button', { name: 'Copy from day or set' })).not.toBeInTheDocument();
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit day' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy from day or set' }));
+    expect(screen.getByTestId('copy-day-set-sheet')).toBeInTheDocument();
+    expect(screen.getByLabelText('Day')).toHaveValue('1');
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy Day to Today' }));
+    await waitFor(() => {
+      expect(makeSet).toHaveBeenCalledWith(1, {
+        name: 'Morning',
+        day_of_week: 3,
+        start_minutes: 420,
+        sort_order: 1,
+      });
+      expect(saveExercises).toHaveBeenCalledWith(40, [3]);
+    });
+
+    makeSet.mockClear();
+    saveExercises.mockClear();
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy from day or set' }));
+    await fireEvent.change(screen.getByLabelText('Set'), { target: { value: '10' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy Set to Today' }));
+    await waitFor(() => {
+      expect(makeSet).toHaveBeenCalledTimes(1);
+      expect(saveExercises).toHaveBeenCalledWith(40, [3]);
+    });
+
+    makeSet.mockResolvedValueOnce({
+      ok: false as const,
+      status: 400,
+      code: 'invalid_request',
+      message: 'Could not copy set',
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy from day or set' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Copy Day to Today' }));
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Could not copy set');
+    });
+  });
 });

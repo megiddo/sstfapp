@@ -27,6 +27,7 @@
   let confirmPassword = $state('');
   let mode = $state<Mode>('signin');
   let submitting = $state(false);
+  let showPassword = $state(false);
 
   function setMode(next: Mode) {
     mode = next;
@@ -98,6 +99,11 @@
     Continue with Google
   </a>
   <p class="divider">or</p>
+  {#if !showPassword}
+    <button type="button" class="password-toggle" onclick={() => (showPassword = true)}>
+      Login with Password
+    </button>
+  {:else}
   <div class="mode" role="tablist" aria-label="Username and password">
     <button
       type="button"
@@ -155,6 +161,7 @@
       {mode === 'register' ? 'Create account' : 'Sign in'}
     </button>
   </form>
+  {/if}
   {#if error !== ''}
     <p class="error" data-testid="login-error" role="alert">{error}</p>
   {/if}
@@ -181,6 +188,21 @@
   .google-mark {
     display: block;
     flex-shrink: 0;
+  }
+
+  .password-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 48px;
+    border: 1px solid #333;
+    border-radius: 10px;
+    background: #1c1c1c;
+    color: #f5f5f5;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
   }
 
   .divider {
