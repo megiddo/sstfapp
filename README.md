@@ -40,6 +40,14 @@ Vite proxies `/api` → `http://api:27180` inside Compose (or `http://localhost:
 
 Set a real `SESSION_SECRET` in `.env`.
 
+From the repo root, pull `main` and rebuild:
+
+```bash
+./scripts/deploy.sh
+```
+
+Or:
+
 ```bash
 docker compose --env-file .env -f docker/compose.prod.yml up --build
 ```

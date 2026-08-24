@@ -25,6 +25,7 @@ describe('LoginPage', () => {
     expect(screen.getByRole('tab', { name: 'Sign in' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Create account' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByTestId('app-version')).toHaveTextContent('v0.1.2');
   });
 
   it('lets password registration work alongside Google', async () => {

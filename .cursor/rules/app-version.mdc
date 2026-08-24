@@ -5,7 +5,7 @@ alwaysApply: true
 
 # App version
 
-Every pull request must ship a new app version. Settings shows that number at the bottom of the page.
+Every pull request must ship a new app version. Settings and login show that number at the bottom of the page.
 
 - Source of truth: `frontend/src/lib/version.ts` (`APP_VERSION`) and `frontend/package.json` `version`. Keep them identical. Use semver with no leading `v` (the UI adds `v`).
 - Also update `frontend/package-lock.json` top-level `version` fields to match.

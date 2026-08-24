@@ -66,6 +66,7 @@ Workout is the default after login. Deep-link `/` with `?set=` after a manual sw
 - Inputs are 16px on a phone column. Continue with Google is a same-origin link (not One Tap). Password registration asks for confirm password.
 - If Google is not configured, the password form still works.
 - Error: “Google sign-in failed” / “Email not verified” / “Sign-in failed” / “Too many attempts” / “Account already exists” / “Registration failed” / “Passwords do not match” / “Enter a password” — no stack traces.
+- App version at the bottom, same as Settings.
 
 ### 4.2 Workout (home) — primary
 
