@@ -6,6 +6,8 @@ import {
   createSet,
   deleteSet,
   catalogIdsFromSet,
+  copySetsOntoDay,
+  defaultCopySourceDay,
   groupTrainingSetsByDay,
   listScheduleSets,
   listSchedules,
@@ -315,5 +317,74 @@ describe('schedule API helpers', () => {
     expect(catalogIdsFromSet(evening)).toEqual([1]);
     expect(catalogIdsFromSet(morning)).toEqual([3]);
     expect(catalogIdsFromSet({ ...evening, exercises: [] })).toEqual([]);
+  });
+
+  it('picks a source day and copies sets onto another day', async () => {
+    const morning = {
+      ...evening,
+      id: 10,
+      name: 'Morning',
+      day_of_week: 1,
+      start_minutes: 420,
+      exercises: [
+        { ...evening.exercises[0], id: 8, global_exercise_id: 3, name: 'Squat' },
+        { ...evening.exercises[0], id: 9, global_exercise_id: null, name: 'Custom hold' },
+      ],
+    };
+    const empty = { ...morning, id: 11, name: 'Empty', exercises: [] };
+    expect(defaultCopySourceDay([evening, morning], 3)).toBe(1);
+    expect(defaultCopySourceDay([evening], 3)).toBe(3);
+    expect(defaultCopySourceDay([], 2)).toBe(2);
+    expect(defaultCopySourceDay([{ ...evening, day_of_week: 6 }], 0)).toBe(6);
+
+    const makeSet = vi.fn(async (_scheduleId: number, input: { name: string; sort_order?: number }) => ({
+      ok: true as const,
+      set: { ...evening, id: 40 + (input.sort_order ?? 0), name: input.name, day_of_week: 3, exercises: [] },
+    }));
+    const saveExercises = vi.fn(async (setId: number) => ({
+      ok: true as const,
+      set: { ...evening, id: setId, exercises: [] },
+    }));
+    await expect(copySetsOntoDay(1, 3, [morning, empty], 2, makeSet, saveExercises)).resolves.toEqual({ ok: true });
+    expect(makeSet).toHaveBeenNthCalledWith(1, 1, {
+      name: 'Morning',
+      day_of_week: 3,
+      start_minutes: 420,
+      sort_order: 2,
+    });
+    expect(makeSet).toHaveBeenNthCalledWith(2, 1, {
+      name: 'Empty',
+      day_of_week: 3,
+      start_minutes: 420,
+      sort_order: 3,
+    });
+    expect(saveExercises).toHaveBeenCalledTimes(1);
+    expect(saveExercises).toHaveBeenCalledWith(42, [3]);
+
+    makeSet.mockResolvedValueOnce({
+      ok: false as const,
+      status: 400,
+      code: 'invalid_request',
+      message: 'Could not add set',
+    });
+    await expect(copySetsOntoDay(1, 3, [morning], 0, makeSet, saveExercises)).resolves.toMatchObject({
+      ok: false,
+      message: 'Could not add set',
+    });
+
+    makeSet.mockResolvedValueOnce({
+      ok: true as const,
+      set: { ...evening, id: 50, day_of_week: 3, exercises: [] },
+    });
+    saveExercises.mockResolvedValueOnce({
+      ok: false as const,
+      status: 400,
+      code: 'invalid_request',
+      message: 'Could not copy exercises',
+    });
+    await expect(copySetsOntoDay(1, 3, [morning], 0, makeSet, saveExercises)).resolves.toMatchObject({
+      ok: false,
+      message: 'Could not copy exercises',
+    });
   });
 });

@@ -424,6 +424,48 @@ export function catalogIdsFromSet(set: TrainingSet): number[] {
   return ids;
 }
 
+export function defaultCopySourceDay(sets: TrainingSet[], targetDay: number): number {
+  for (let step = 1; step <= 7; step += 1) {
+    const day = (targetDay - step + 7) % 7;
+    if (sets.some((set) => set.day_of_week === day)) {
+      return day;
+    }
+  }
+  return targetDay;
+}
+
+export async function copySetsOntoDay(
+  scheduleId: number,
+  targetDay: number,
+  sources: TrainingSet[],
+  sortStart: number,
+  makeSet: typeof createSet,
+  saveExercises: typeof replaceSetExercises,
+): Promise<{ ok: true } | ApiFail> {
+  let sortOrder = sortStart;
+  for (const source of sources) {
+    const created = await makeSet(scheduleId, {
+      name: source.name,
+      day_of_week: targetDay,
+      start_minutes: source.start_minutes,
+      sort_order: sortOrder,
+    });
+    if (!created.ok) {
+      return created;
+    }
+    sortOrder += 1;
+    const ids = catalogIdsFromSet(source);
+    if (ids.length === 0) {
+      continue;
+    }
+    const saved = await saveExercises(created.set.id, ids);
+    if (!saved.ok) {
+      return saved;
+    }
+  }
+  return { ok: true };
+}
+
 export function moveExercise(ids: number[], index: number, direction: -1 | 1): number[] {
   const target = index + direction;
   if (index < 0 || index >= ids.length || target < 0 || target >= ids.length) {

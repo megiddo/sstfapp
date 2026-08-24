@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.4';
+export const APP_VERSION = '0.1.5';
 
 export function formatAppVersion(version: string = APP_VERSION): string {
   if (version.startsWith('v')) {

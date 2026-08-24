@@ -4,7 +4,11 @@ import LoginPage from './LoginPage.svelte';
 import { AUTH_ERROR_EMAIL_UNVERIFIED, AUTH_ERROR_GOOGLE_FAILED } from './authErrors';
 
 describe('LoginPage', () => {
-  it('renders SSTF copy and a Google OAuth link', () => {
+  async function revealPassword() {
+    await fireEvent.click(screen.getByRole('button', { name: 'Login with Password' }));
+  }
+
+  it('renders SSTF copy and a Google OAuth link', async () => {
     render(LoginPage, {
       props: {
         timeZone: () => 'America/Chicago',
@@ -17,20 +21,25 @@ describe('LoginPage', () => {
     const google = screen.getByTestId('google-button');
     expect(google).toHaveTextContent('Continue with Google');
     expect(google).toContainElement(screen.getByTestId('google-icon'));
-    expect(google.compareDocumentPosition(screen.getByRole('tablist')) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+    const passwordToggle = screen.getByRole('button', { name: 'Login with Password' });
+    expect(google.compareDocumentPosition(passwordToggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
     expect(google.getAttribute('href')).toMatch(
       /\/api\/auth\/google\?timezone=America%2FChicago$/,
     );
     expect(google).toHaveAttribute('rel', 'external');
     expect(google).toHaveAttribute('data-sveltekit-reload', '');
+    expect(screen.getByTestId('app-version')).toHaveTextContent('v0.1.5');
+
+    await revealPassword();
     expect(screen.getByLabelText('Username')).toBeInTheDocument();
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Sign in' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('tab', { name: 'Create account' })).toHaveAttribute('aria-selected', 'false');
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
-    expect(screen.getByTestId('app-version')).toHaveTextContent('v0.1.4');
   });
 
   it('lets password registration work alongside Google', async () => {
@@ -55,6 +64,7 @@ describe('LoginPage', () => {
     expect(screen.getByTestId('google-button')).toBeInTheDocument();
     expect(screen.queryByTestId('login-error')).not.toBeInTheDocument();
 
+    await revealPassword();
     await fireEvent.click(screen.getByRole('tab', { name: 'Create account' }));
     await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'new@example.com' } });
     await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'secret' } });
@@ -109,6 +119,7 @@ describe('LoginPage', () => {
       },
     });
 
+    await revealPassword();
     await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'lifter@example.com' } });
     await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'secret' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -139,6 +150,7 @@ describe('LoginPage', () => {
       },
     });
 
+    await revealPassword();
     await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'a@b.com' } });
     await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'x' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -173,6 +185,7 @@ describe('LoginPage', () => {
       },
     });
 
+    await revealPassword();
     await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'a@b.com' } });
     await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'x' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -196,6 +209,7 @@ describe('LoginPage', () => {
       },
     });
 
+    await revealPassword();
     await fireEvent.click(screen.getByRole('tab', { name: 'Create account' }));
     await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'a@b.com' } });
     await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'one' } });
@@ -221,6 +235,7 @@ describe('LoginPage', () => {
       },
     });
 
+    await revealPassword();
     await fireEvent.click(screen.getByRole('tab', { name: 'Create account' }));
     await fireEvent.input(screen.getByLabelText('Username'), { target: { value: 'a@b.com' } });
     await fireEvent.input(screen.getByLabelText('Password'), { target: { value: 'secret' } });
