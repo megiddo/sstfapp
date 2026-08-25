@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fetchHistory, groupConsecutiveSets, type HistoryDayData, type HistoryLog } from './history';
+import { fetchHistory, groupConsecutiveSets, patchHistoryLog, deleteHistoryLog, type HistoryDayData, type HistoryLog } from './history';
 
 const bench: HistoryLog = {
   id: 1,
@@ -173,5 +173,58 @@ describe('history API helpers', () => {
       { set_name: 'Evening', logs: [row] },
     ]);
     expect(groupConsecutiveSets([bench]).length).not.toBe(0);
+  });
+
+  it('patches and deletes a history log', async () => {
+    const patched = { ...bench, weight: 190, reps: 6 };
+    const patch = vi.fn(async (path: string, init?: RequestInit) => {
+      expect(path).toBe('/api/logs/1');
+      expect(init?.method).toBe('PATCH');
+      expect(init?.body).toBe(JSON.stringify({ weight: 190, reps: 6 }));
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: patched }),
+      } as Response;
+    });
+    await expect(patchHistoryLog(1, { weight: 190, reps: 6 }, patch)).resolves.toEqual({
+      ok: true,
+      log: patched,
+    });
+
+    const del = vi.fn(async (path: string, init?: RequestInit) => {
+      expect(path).toBe('/api/logs/2');
+      expect(init?.method).toBe('DELETE');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ data: { ok: true } }),
+      } as Response;
+    });
+    await expect(deleteHistoryLog(2, del)).resolves.toEqual({ ok: true });
+  });
+
+  it('maps patch and delete failures', async () => {
+    await expect(
+      patchHistoryLog(1, { weight: 1, reps: 1 }, jsonResponse(404, { error: { code: 'not_found', message: 'Log not found' } })),
+    ).resolves.toEqual({
+      ok: false,
+      status: 404,
+      code: 'not_found',
+      message: 'Log not found',
+    });
+    await expect(patchHistoryLog(1, { weight: 1, reps: 1 }, jsonResponse(200, { data: { id: 1 } }))).resolves.toMatchObject({
+      ok: false,
+    });
+    await expect(deleteHistoryLog(1, jsonResponse(200, { data: { ok: false } }))).resolves.toMatchObject({
+      ok: false,
+    });
+    await expect(deleteHistoryLog(1, jsonResponse(500, {}))).resolves.toMatchObject({ ok: false });
+
+    const boom = vi.fn(async () => {
+      throw new Error('offline');
+    }) as unknown as typeof fetch;
+    await expect(patchHistoryLog(1, { weight: 1, reps: 1 }, boom)).resolves.toMatchObject({ ok: false, status: 0 });
+    await expect(deleteHistoryLog(1, boom)).resolves.toMatchObject({ ok: false, status: 0 });
   });
 });

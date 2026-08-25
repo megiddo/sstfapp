@@ -11,6 +11,7 @@ use Sstf\Api\Domain\HistoryDay;
 use Sstf\Api\Domain\HistoryFilters;
 use Sstf\Api\Domain\HistoryGrouper;
 use Sstf\Api\Domain\InvalidHistoryFilterException;
+use Sstf\Api\Domain\LogNotFoundException;
 use Sstf\Api\Domain\UnauthenticatedException;
 use Sstf\Api\Http\Controllers\ExportController;
 use Sstf\Api\Http\Controllers\LogController;
@@ -33,6 +34,7 @@ use Sstf\Api\Tests\HttpTestCase;
 #[CoversClass(HistoryDay::class)]
 #[CoversClass(HistoryFilters::class)]
 #[CoversClass(InvalidHistoryFilterException::class)]
+#[CoversClass(LogNotFoundException::class)]
 #[CoversClass(ExerciseLog::class)]
 #[CoversClass(UnauthenticatedException::class)]
 #[CoversClass(FileResponder::class)]
@@ -188,6 +190,59 @@ final class HistoryExportTest extends HttpTestCase
         $this->assertSame('unauthenticated', $this->json($export)['error']['code']);
         $this->assertSame('application/json', $export->getHeaderLine('Content-Type'));
         $this->assertSame('', $export->getHeaderLine('Content-Disposition'));
+    }
+
+    public function testLogsCanBePatchedAndDeleted(): void
+    {
+        $email = 'edit-' . bin2hex(random_bytes(4)) . '@example.com';
+        $this->signIn($email, 'America/Chicago');
+        $seeded = $this->seedEvening();
+
+        $this->freezeAt('2026-08-19 18:40:00', 'America/Chicago');
+        $created = $this->request('POST', '/api/logs', [
+            'set_id' => $seeded['eveningId'],
+            'global_exercise_id' => $seeded['benchId'],
+            'weight' => 185,
+            'reps' => 8,
+        ]);
+        $this->assertSame(200, $created->getStatusCode());
+        $logId = $this->json($created)['data']['id'];
+
+        $patched = $this->request('PATCH', '/api/logs/' . $logId, [
+            'weight' => 190.5,
+            'reps' => 6,
+        ]);
+        $this->assertSame(200, $patched->getStatusCode());
+        $this->assertEquals(190.5, $this->json($patched)['data']['weight']);
+        $this->assertSame(6, $this->json($patched)['data']['reps']);
+        $this->assertSame('Bench Press', $this->json($patched)['data']['exercise_name']);
+
+        $history = $this->json($this->request('GET', '/api/logs'))['data']['days'];
+        $this->assertCount(1, $history);
+        $this->assertEquals(190.5, $history[0]['logs'][0]['weight']);
+        $this->assertSame(6, $history[0]['logs'][0]['reps']);
+
+        $this->assertSame(400, $this->request('PATCH', '/api/logs/' . $logId, [
+            'weight' => -1,
+            'reps' => 1,
+        ])->getStatusCode());
+        $this->assertSame(400, $this->request('PATCH', '/api/logs/' . $logId, [
+            'weight' => 1,
+        ])->getStatusCode());
+        $this->assertSame(404, $this->request('PATCH', '/api/logs/99999', [
+            'weight' => 1,
+            'reps' => 1,
+        ])->getStatusCode());
+        $this->assertSame(404, $this->request('PATCH', '/api/logs/abc', [
+            'weight' => 1,
+            'reps' => 1,
+        ])->getStatusCode());
+
+        $deleted = $this->request('DELETE', '/api/logs/' . $logId, []);
+        $this->assertSame(200, $deleted->getStatusCode());
+        $this->assertTrue($this->json($deleted)['data']['ok']);
+        $this->assertSame([], $this->json($this->request('GET', '/api/logs'))['data']['days']);
+        $this->assertSame(404, $this->request('DELETE', '/api/logs/' . $logId, [])->getStatusCode());
     }
 
     /**

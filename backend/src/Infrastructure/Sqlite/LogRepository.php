@@ -8,6 +8,7 @@ use PDO;
 use Sstf\Api\Domain\ClockInterface;
 use Sstf\Api\Domain\Exercise;
 use Sstf\Api\Domain\ExerciseLog;
+use Sstf\Api\Domain\LogNotFoundException;
 use Sstf\Api\Domain\LogPrefill;
 
 final class LogRepository
@@ -117,10 +118,16 @@ final class LogRepository
             'notes' => $notes,
         ]);
 
-        return $this->getById($emailHash, (int) $pdo->lastInsertId());
+        $id = (int) $pdo->lastInsertId();
+        $log = $this->findById($emailHash, $id);
+        if ($log === null) {
+            throw new \RuntimeException('Log row missing after insert');
+        }
+
+        return $log;
     }
 
-    public function getById(string $emailHash, int $id): ExerciseLog
+    public function findById(string $emailHash, int $id): ?ExerciseLog
     {
         $pdo = $this->users->open($emailHash);
         $stmt = $pdo->prepare(
@@ -132,10 +139,47 @@ final class LogRepository
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         if ($row === false) {
-            throw new \RuntimeException('Log row missing after insert');
+            return null;
         }
 
         return $this->mapLog($row);
+    }
+
+    public function getById(string $emailHash, int $id): ExerciseLog
+    {
+        $log = $this->findById($emailHash, $id);
+        if ($log === null) {
+            throw new LogNotFoundException();
+        }
+
+        return $log;
+    }
+
+    public function updateWeightReps(string $emailHash, int $id, float $weight, int $reps): ExerciseLog
+    {
+        if ($this->findById($emailHash, $id) === null) {
+            throw new LogNotFoundException();
+        }
+
+        $pdo = $this->users->open($emailHash);
+        $stmt = $pdo->prepare('UPDATE logs SET weight = :weight, reps = :reps WHERE id = :id');
+        $stmt->execute([
+            'weight' => $weight,
+            'reps' => $reps,
+            'id' => $id,
+        ]);
+
+        return $this->getById($emailHash, $id);
+    }
+
+    public function deleteById(string $emailHash, int $id): void
+    {
+        $pdo = $this->users->open($emailHash);
+        $stmt = $pdo->prepare('DELETE FROM logs WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+        if ($stmt->rowCount() === 0) {
+            throw new LogNotFoundException();
+        }
     }
 
     /**

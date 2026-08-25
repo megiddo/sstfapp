@@ -10,6 +10,7 @@ use Sstf\Api\Domain\HistoryDay;
 use Sstf\Api\Domain\HistoryFilters;
 use Sstf\Api\Domain\HistoryGrouper;
 use Sstf\Api\Domain\InvalidLogException;
+use Sstf\Api\Domain\LogNotFoundException;
 use Sstf\Api\Domain\SetExercise;
 use Sstf\Api\Domain\SetNotFoundException;
 use Sstf\Api\Domain\UnauthenticatedException;
@@ -81,6 +82,30 @@ final class LogService
             $reps,
             $trimmedNotes,
         );
+    }
+
+    public function update(string $emailHash, int $id, float $weight, int $reps): ExerciseLog
+    {
+        if ($weight < 0 || $reps < 0) {
+            throw new InvalidLogException();
+        }
+
+        $account = $this->accounts->loadAccount($emailHash);
+        if ($account === null) {
+            throw new UnauthenticatedException();
+        }
+
+        return $this->logs->updateWeightReps($emailHash, $id, $weight, $reps);
+    }
+
+    public function delete(string $emailHash, int $id): void
+    {
+        $account = $this->accounts->loadAccount($emailHash);
+        if ($account === null) {
+            throw new UnauthenticatedException();
+        }
+
+        $this->logs->deleteById($emailHash, $id);
     }
 
     /**

@@ -1,9 +1,17 @@
 <script lang="ts">
   import EmptyState from './EmptyState.svelte';
   import { formatHistoryDay, formatLogLine } from './format';
-  import { groupConsecutiveSets, type HistoryDayData } from './history';
+  import { groupConsecutiveSets, type HistoryDayData, type HistoryLog } from './history';
 
-  let { days }: { days: HistoryDayData[] } = $props();
+  let {
+    days,
+    onEdit,
+    onDelete,
+  }: {
+    days: HistoryDayData[];
+    onEdit: (log: HistoryLog) => void;
+    onDelete: (log: HistoryLog) => void;
+  } = $props();
 </script>
 
 {#if days.length === 0}
@@ -19,7 +27,15 @@
             <ul>
               {#each group.logs as log (log.id)}
                 <li data-testid="history-log">
-                  {formatLogLine(log.exercise_name, log.weight, log.weight_unit, log.reps)}
+                  <span class="line">{formatLogLine(log.exercise_name, log.weight, log.weight_unit, log.reps)}</span>
+                  <div class="actions">
+                    <button type="button" class="action" aria-label={`Edit log ${log.id}`} onclick={() => onEdit(log)}>
+                      Edit
+                    </button>
+                    <button type="button" class="action" aria-label={`Delete log ${log.id}`} onclick={() => onDelete(log)}>
+                      Delete
+                    </button>
+                  </div>
                 </li>
               {/each}
             </ul>
@@ -66,7 +82,31 @@
     min-height: 48px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
     font-variant-numeric: tabular-nums;
     color: #f5f5f5;
+  }
+
+  .line {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .actions {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 0.25rem;
+  }
+
+  .action {
+    min-height: 48px;
+    min-width: 48px;
+    border: 0;
+    background: transparent;
+    color: #e8a04a;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0 0.4rem;
   }
 </style>

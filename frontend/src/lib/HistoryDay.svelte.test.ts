@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/svelte';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/svelte';
+import { describe, expect, it, vi } from 'vitest';
 import HistoryDay from './HistoryDay.svelte';
 import type { HistoryDayData } from './history';
 
@@ -45,13 +45,15 @@ const twoDays: HistoryDayData[] = [
 
 describe('HistoryDay', () => {
   it('shows the empty copy when no days are logged', () => {
-    render(HistoryDay, { props: { days: [] } });
+    render(HistoryDay, { props: { days: [], onEdit: vi.fn(), onDelete: vi.fn() } });
     expect(screen.getByText('No sets logged yet')).toBeInTheDocument();
     expect(screen.queryByTestId('history-day')).not.toBeInTheDocument();
   });
 
-  it('renders two reverse-chronological days with stored units', () => {
-    render(HistoryDay, { props: { days: twoDays } });
+  it('renders two reverse-chronological days with edit and delete', async () => {
+    const onEdit = vi.fn();
+    const onDelete = vi.fn();
+    render(HistoryDay, { props: { days: twoDays, onEdit, onDelete } });
     const days = screen.getAllByTestId('history-day');
     expect(days).toHaveLength(2);
     expect(days[0]).toHaveTextContent(/Thursday/);
@@ -61,8 +63,11 @@ describe('HistoryDay', () => {
     expect(days[1]).toHaveTextContent('Evening');
     expect(days[1]).toHaveTextContent(/Bench Press\s+185 lb × 8/);
     expect(days[1]).toHaveTextContent(/Barbell Row\s+135 lb × 10/);
-    expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
     expect(screen.queryByText('No sets logged yet')).not.toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit log 1' }));
+    expect(onEdit).toHaveBeenCalledWith(twoDays[1]?.logs[0]);
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete log 2' }));
+    expect(onDelete).toHaveBeenCalledWith(twoDays[0]?.logs[0]);
   });
 });

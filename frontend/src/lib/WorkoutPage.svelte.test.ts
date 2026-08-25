@@ -87,8 +87,8 @@ describe('WorkoutPage', () => {
     expect(screen.getByRole('button', { name: 'Change set' })).toBeInTheDocument();
 
     const logs = screen.getAllByRole('button', { name: 'Log' });
-    await fireEvent.click(screen.getAllByRole('button', { name: 'Increase weight' })[0]!);
-    await fireEvent.click(screen.getAllByRole('button', { name: 'Increase reps' })[0]!);
+    await fireEvent.input(screen.getAllByLabelText('Weight (lb)')[0]!, { target: { value: '187.5' } });
+    await fireEvent.input(screen.getAllByLabelText('Reps')[0]!, { target: { value: '9' } });
     await fireEvent.click(logs[0]!);
     await waitFor(() => {
       expect(logExercise).toHaveBeenCalledWith({
@@ -100,6 +100,99 @@ describe('WorkoutPage', () => {
     });
     expect(logs[0]).toHaveTextContent('Logged');
     expect(logs[1]).toHaveTextContent('Log');
+    expect(screen.getByRole('button', { name: 'Log all' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Increase weight' })).not.toBeInTheDocument();
+  });
+
+  it('logs every exercise with Log All', async () => {
+    const logExercise = vi.fn(async (input: { global_exercise_id: number }) => ({
+      ok: true as const,
+      log: {
+        id: input.global_exercise_id,
+        schedule_name: 'Hypertrophy',
+        set_name: 'Evening',
+        exercise_name: input.global_exercise_id === 1 ? 'Bench Press' : 'Barbell Row',
+        weight: input.global_exercise_id === 1 ? 185 : 0,
+        weight_unit: 'lb' as const,
+        reps: input.global_exercise_id === 1 ? 8 : 0,
+      },
+    }));
+    render(WorkoutPage, {
+      props: {
+        now: () => new Date(2026, 7, 19, 18, 40),
+        loadCurrent: async () => ({ ok: true, workout: evening }),
+        loadSets: async () => ({ ok: true, payload: switcher }),
+        logExercise,
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Log all' })).toBeInTheDocument();
+    });
+    await fireEvent.input(screen.getAllByLabelText('Weight (lb)')[1]!, { target: { value: '135' } });
+    await fireEvent.input(screen.getAllByLabelText('Reps')[1]!, { target: { value: '10' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Log all' }));
+    await waitFor(() => {
+      expect(logExercise).toHaveBeenCalledTimes(2);
+    });
+    expect(logExercise).toHaveBeenNthCalledWith(1, {
+      set_id: 9,
+      global_exercise_id: 1,
+      weight: 185,
+      reps: 8,
+    });
+    expect(logExercise).toHaveBeenNthCalledWith(2, {
+      set_id: 9,
+      global_exercise_id: 2,
+      weight: 135,
+      reps: 10,
+    });
+    expect(screen.getAllByRole('button', { name: 'Log' })[0]).toHaveTextContent('Logged');
+    expect(screen.getAllByRole('button', { name: 'Log' })[1]).toHaveTextContent('Logged');
+  });
+
+  it('stops Log All when one exercise fails', async () => {
+    const logExercise = vi.fn(async () => ({
+      ok: false as const,
+      status: 500,
+      code: 'invalid_request',
+      message: 'Invalid log',
+    }));
+    render(WorkoutPage, {
+      props: {
+        loadCurrent: async () => ({ ok: true, workout: evening }),
+        loadSets: async () => ({ ok: true, payload: switcher }),
+        logExercise,
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Log all' })).toBeInTheDocument();
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Log all' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('workout-error')).toHaveTextContent('Invalid log');
+    });
+    expect(logExercise).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not post when Log All has no catalog exercises', async () => {
+    const logExercise = vi.fn();
+    render(WorkoutPage, {
+      props: {
+        loadCurrent: async () => ({
+          ok: true,
+          workout: {
+            ...evening,
+            exercises: [{ ...evening.exercises[0]!, global_exercise_id: null }],
+          },
+        }),
+        logExercise,
+      },
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Log all' })).toBeDisabled();
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Log all' }));
+    expect(logExercise).not.toHaveBeenCalled();
   });
 
   it('shows first-run empty copy and routes into schedules', async () => {
@@ -126,6 +219,7 @@ describe('WorkoutPage', () => {
     });
     await fireEvent.click(screen.getByRole('button', { name: 'Create a schedule' }));
     expect(navigate).toHaveBeenCalledWith('/schedules');
+    expect(screen.queryByRole('button', { name: 'Log all' })).not.toBeInTheDocument();
   });
 
   it('routes a set with no exercises into the set editor', async () => {

@@ -1,15 +1,28 @@
 <script lang="ts">
+  import ConfirmSheet from './ConfirmSheet.svelte';
   import HistoryDay from './HistoryDay.svelte';
+  import HistoryLogSheet from './HistoryLogSheet.svelte';
   import PhoneShell from './PhoneShell.svelte';
   import { listExercises, type Exercise } from './exercises';
-  import { fetchHistory, type HistoryDayData, type HistoryFilters } from './history';
+  import {
+    deleteHistoryLog,
+    fetchHistory,
+    patchHistoryLog,
+    type HistoryDayData,
+    type HistoryFilters,
+    type HistoryLog,
+  } from './history';
 
   let {
     loadHistory = fetchHistory,
     loadExercises = listExercises,
+    saveLog = patchHistoryLog,
+    removeLog = deleteHistoryLog,
   }: {
     loadHistory?: typeof fetchHistory;
     loadExercises?: typeof listExercises;
+    saveLog?: typeof patchHistoryLog;
+    removeLog?: typeof deleteHistoryLog;
   } = $props();
 
   let days: HistoryDayData[] = $state([]);
@@ -19,6 +32,9 @@
   let exerciseId = $state('');
   let error = $state('');
   let loaded = $state(false);
+  let editing = $state<HistoryLog | null>(null);
+  let deleting = $state<HistoryLog | null>(null);
+  let saving = $state(false);
 
   $effect(() => {
     void loadCatalog();
@@ -56,6 +72,35 @@
     }
     error = '';
     days = result.days;
+  }
+
+  async function handleSave(weight: number, reps: number) {
+    if (editing === null) {
+      return;
+    }
+    saving = true;
+    const result = await saveLog(editing.id, { weight, reps });
+    saving = false;
+    if (!result.ok) {
+      error = result.message;
+      return;
+    }
+    editing = null;
+    await refresh();
+  }
+
+  async function handleDelete() {
+    if (deleting === null) {
+      return;
+    }
+    const id = deleting.id;
+    deleting = null;
+    const result = await removeLog(id);
+    if (!result.ok) {
+      error = result.message;
+      return;
+    }
+    await refresh();
   }
 </script>
 
@@ -111,9 +156,30 @@
   </form>
 
   {#if loaded}
-    <HistoryDay {days} />
+    <HistoryDay {days} onEdit={(log) => (editing = log)} onDelete={(log) => (deleting = log)} />
   {/if}
 </PhoneShell>
+
+{#if editing !== null}
+  {#key editing.id}
+    <HistoryLogSheet
+      log={editing}
+      pending={saving}
+      onSave={(weight, reps) => void handleSave(weight, reps)}
+      onClose={() => (editing = null)}
+    />
+  {/key}
+{/if}
+
+{#if deleting !== null}
+  <ConfirmSheet
+    title="Delete this log?"
+    message="This cannot be undone."
+    confirmLabel="Delete"
+    onConfirm={() => void handleDelete()}
+    onCancel={() => (deleting = null)}
+  />
+{/if}
 
 <style>
   .error {

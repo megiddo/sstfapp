@@ -10,6 +10,7 @@ use Sstf\Api\Domain\ExerciseNotOnSetException;
 use Sstf\Api\Domain\InvalidHistoryFilterException;
 use Sstf\Api\Domain\InvalidLogException;
 use Sstf\Api\Domain\HistoryFilters;
+use Sstf\Api\Domain\LogNotFoundException;
 use Sstf\Api\Domain\SetNotFoundException;
 use Sstf\Api\Domain\UnauthenticatedException;
 use Sstf\Api\Http\JsonResponder;
@@ -89,6 +90,69 @@ final class LogController
         return JsonResponder::data($log->toApi());
     }
 
+    /**
+     * @param array<string, string> $args
+     */
+    public function patch(Request $request, Response $response, array $args): Response
+    {
+        $hash = $this->emailHash($request);
+        if ($hash === null) {
+            return JsonResponder::error('unauthenticated', 'Authentication required', 401);
+        }
+        $id = $this->positiveId($args['id'] ?? null);
+        if ($id === null) {
+            return JsonResponder::error('not_found', 'Log not found', 404);
+        }
+
+        $body = $request->getParsedBody();
+        if (!is_array($body)) {
+            return JsonResponder::error('invalid_request', 'Invalid log', 400);
+        }
+
+        $weight = $this->requireWeight($body['weight'] ?? null);
+        $reps = $this->requireReps($body['reps'] ?? null);
+        if ($weight === null || $reps === null) {
+            return JsonResponder::error('invalid_request', 'Invalid log', 400);
+        }
+
+        try {
+            $log = $this->logs->update($hash, $id, $weight, $reps);
+        } catch (UnauthenticatedException) {
+            return JsonResponder::error('unauthenticated', 'Authentication required', 401);
+        } catch (InvalidLogException) {
+            return JsonResponder::error('invalid_request', 'Invalid log', 400);
+        } catch (LogNotFoundException) {
+            return JsonResponder::error('not_found', 'Log not found', 404);
+        }
+
+        return JsonResponder::data($log->toApi());
+    }
+
+    /**
+     * @param array<string, string> $args
+     */
+    public function delete(Request $request, Response $response, array $args): Response
+    {
+        $hash = $this->emailHash($request);
+        if ($hash === null) {
+            return JsonResponder::error('unauthenticated', 'Authentication required', 401);
+        }
+        $id = $this->positiveId($args['id'] ?? null);
+        if ($id === null) {
+            return JsonResponder::error('not_found', 'Log not found', 404);
+        }
+
+        try {
+            $this->logs->delete($hash, $id);
+        } catch (UnauthenticatedException) {
+            return JsonResponder::error('unauthenticated', 'Authentication required', 401);
+        } catch (LogNotFoundException) {
+            return JsonResponder::error('not_found', 'Log not found', 404);
+        }
+
+        return JsonResponder::data(['ok' => true]);
+    }
+
     private function emailHash(Request $request): ?string
     {
         $hash = $request->getAttribute('email_hash');
@@ -97,6 +161,18 @@ final class LogController
         }
 
         return $hash;
+    }
+
+    private function positiveId(mixed $raw): ?int
+    {
+        if (is_int($raw) && $raw > 0) {
+            return $raw;
+        }
+        if (!is_string($raw) || preg_match('/^[1-9][0-9]*$/', $raw) !== 1) {
+            return null;
+        }
+
+        return (int) $raw;
     }
 
     private function requirePositiveInt(mixed $value): ?int

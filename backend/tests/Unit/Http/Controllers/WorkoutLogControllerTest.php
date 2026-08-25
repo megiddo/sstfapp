@@ -12,6 +12,7 @@ use Sstf\Api\Domain\RepoKey;
 use Sstf\Api\Domain\ExerciseLog;
 use Sstf\Api\Domain\ExerciseNotOnSetException;
 use Sstf\Api\Domain\InvalidLogException;
+use Sstf\Api\Domain\LogNotFoundException;
 use Sstf\Api\Domain\LogPrefill;
 use Sstf\Api\Domain\Schedule;
 use Sstf\Api\Domain\SetExercise;
@@ -47,6 +48,7 @@ use Sstf\Api\Tests\Fakes\FakeClock;
 #[CoversClass(ExerciseLog::class)]
 #[CoversClass(LogPrefill::class)]
 #[CoversClass(InvalidLogException::class)]
+#[CoversClass(LogNotFoundException::class)]
 #[CoversClass(ExerciseNotOnSetException::class)]
 #[CoversClass(SetNotFoundException::class)]
 #[CoversClass(UnauthenticatedException::class)]
@@ -128,6 +130,11 @@ final class WorkoutLogControllerTest extends TestCase
             'weight' => 1,
             'reps' => 1,
         ]), new Response())->getStatusCode());
+        $this->assertSame(401, $this->logs->patch($unauth->withParsedBody([
+            'weight' => 1,
+            'reps' => 1,
+        ]), new Response(), ['id' => '1'])->getStatusCode());
+        $this->assertSame(401, $this->logs->delete($unauth, new Response(), ['id' => '1'])->getStatusCode());
 
         $missingAccount = $factory->createServerRequest('GET', '/api/workout/current')
             ->withAttribute('email_hash', str_repeat('11', 16));
@@ -140,6 +147,11 @@ final class WorkoutLogControllerTest extends TestCase
             'weight' => 1,
             'reps' => 1,
         ]), new Response())->getStatusCode());
+        $this->assertSame(401, $this->logs->patch($missingAccount->withParsedBody([
+            'weight' => 1,
+            'reps' => 1,
+        ]), new Response(), ['id' => '1'])->getStatusCode());
+        $this->assertSame(401, $this->logs->delete($missingAccount, new Response(), ['id' => '1'])->getStatusCode());
 
         $authed = $factory->createServerRequest('GET', '/api/workout/current')
             ->withAttribute('email_hash', $this->hash);
@@ -213,8 +225,64 @@ final class WorkoutLogControllerTest extends TestCase
             'notes' => null,
         ]), new Response());
         $this->assertSame(200, $created->getStatusCode());
+        $createdBody = json_decode((string) $created->getBody(), true);
+        $this->assertIsArray($createdBody);
+        $this->assertIsArray($createdBody['data']);
+        $logId = $createdBody['data']['id'];
+        $this->assertIsInt($logId);
 
-        $this->expectException(\RuntimeException::class);
+        $this->assertSame(404, $this->logs->patch($authed->withParsedBody([
+            'weight' => 1,
+            'reps' => 1,
+        ]), new Response(), ['id' => '0'])->getStatusCode());
+        $this->assertSame(404, $this->logs->patch($authed->withParsedBody([
+            'weight' => 1,
+            'reps' => 1,
+        ]), new Response(), ['id' => 'abc'])->getStatusCode());
+        $this->assertSame(400, $this->logs->patch($authed->withParsedBody(null), new Response(), ['id' => (string) $logId])->getStatusCode());
+        $this->assertSame(400, $this->logs->patch($authed->withParsedBody([
+            'weight' => -1,
+            'reps' => 1,
+        ]), new Response(), ['id' => (string) $logId])->getStatusCode());
+        $this->assertSame(400, $this->logs->patch($authed->withParsedBody([
+            'weight' => 1,
+            'reps' => -1,
+        ]), new Response(), ['id' => (string) $logId])->getStatusCode());
+        $this->assertSame(400, $this->logs->patch($authed->withParsedBody([
+            'weight' => INF,
+            'reps' => 1,
+        ]), new Response(), ['id' => (string) $logId])->getStatusCode());
+        $this->assertSame(400, $this->logs->patch($authed->withParsedBody([
+            'weight' => 1,
+            'reps' => 1.5,
+        ]), new Response(), ['id' => (string) $logId])->getStatusCode());
+        $this->assertSame(404, $this->logs->patch($authed->withParsedBody([
+            'weight' => 1,
+            'reps' => 1,
+        ]), new Response(), ['id' => '99999'])->getStatusCode());
+
+        $patched = $this->logs->patch($authed->withParsedBody([
+            'weight' => 20,
+            'reps' => 4,
+        ]), new Response(), ['id' => (string) $logId]);
+        $this->assertSame(200, $patched->getStatusCode());
+        $patchedInt = $this->logs->patch($authed->withParsedBody([
+            'weight' => 21,
+            'reps' => 5,
+        ]), new Response(), ['id' => $logId]);
+        $this->assertSame(200, $patchedInt->getStatusCode());
+        $patchedAgain = $this->logs->patch($authed->withParsedBody([
+            'weight' => 21,
+            'reps' => 5,
+        ]), new Response(), ['id' => (string) $logId]);
+        $this->assertSame(200, $patchedAgain->getStatusCode());
+
+        $this->assertSame(404, $this->logs->delete($authed, new Response(), ['id' => '0'])->getStatusCode());
+        $this->assertSame(404, $this->logs->delete($authed, new Response(), ['id' => 'abc'])->getStatusCode());
+        $this->assertSame(404, $this->logs->delete($authed, new Response(), ['id' => '99999'])->getStatusCode());
+        $this->assertSame(200, $this->logs->delete($authed, new Response(), ['id' => (string) $logId])->getStatusCode());
+
+        $this->expectException(LogNotFoundException::class);
         $this->logRepo->getById($this->hash, 99999);
     }
 

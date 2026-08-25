@@ -10,6 +10,7 @@ use Sstf\Api\Domain\ClosestSet;
 use Sstf\Api\Domain\ExerciseLog;
 use Sstf\Api\Domain\ExerciseNotOnSetException;
 use Sstf\Api\Domain\InvalidLogException;
+use Sstf\Api\Domain\LogNotFoundException;
 use Sstf\Api\Domain\LogPrefill;
 use Sstf\Api\Domain\Schedule;
 use Sstf\Api\Domain\SetExercise;
@@ -43,6 +44,7 @@ use Sstf\Api\Tests\HttpTestCase;
 #[CoversClass(ExerciseLog::class)]
 #[CoversClass(LogPrefill::class)]
 #[CoversClass(InvalidLogException::class)]
+#[CoversClass(LogNotFoundException::class)]
 #[CoversClass(ExerciseNotOnSetException::class)]
 #[CoversClass(SetNotFoundException::class)]
 #[CoversClass(UnauthenticatedException::class)]
@@ -382,6 +384,11 @@ final class WorkoutTest extends HttpTestCase
             'reps' => 1,
         ]);
         $this->assertSame(401, $post->getStatusCode());
+
+        $patch = $this->request('PATCH', '/api/logs/1', ['weight' => 1, 'reps' => 1]);
+        $this->assertSame(401, $patch->getStatusCode());
+        $delete = $this->request('DELETE', '/api/logs/1', []);
+        $this->assertSame(401, $delete->getStatusCode());
     }
 
     /**

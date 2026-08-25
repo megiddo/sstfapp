@@ -26,6 +26,7 @@ describe('theme tokens', () => {
   it('formats input font css and rejects iOS-zoom sizes', () => {
     expect(minInputFontCss()).toBe('16px');
     expect(minInputFontCss(18)).toBe('18px');
+    expect(minInputFontCss(22)).toBe('22px');
     expect(() => minInputFontCss(15)).toThrow('input font must be at least 16px');
     expect(() => minInputFontCss(0)).toThrow('input font must be at least 16px');
   });
