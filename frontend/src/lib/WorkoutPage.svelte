@@ -90,9 +90,20 @@
     void navigate?.(`/?set=${id}`);
   }
 
-  async function handleLog(exercise: WorkoutExercise) {
+  const loggableExercises = $derived(
+    (workout?.exercises ?? []).filter((exercise) => exercise.global_exercise_id !== null),
+  );
+  const loggingAll = $derived(loggableExercises.some((exercise) => pending[exercise.id] === true));
+  const canLogAll = $derived(
+    workout?.set !== null &&
+      workout?.set !== undefined &&
+      loggableExercises.length > 0 &&
+      !loggingAll,
+  );
+
+  async function logOne(exercise: WorkoutExercise): Promise<boolean> {
     if (workout?.set === null || workout?.set === undefined || exercise.global_exercise_id === null) {
-      return;
+      return false;
     }
     const weightValue = weights[exercise.id] ?? 0;
     const repsValue = reps[exercise.id] ?? 0;
@@ -108,6 +119,25 @@
     if (!result.ok) {
       logged = { ...logged, [exercise.id]: false };
       error = result.message;
+      return false;
+    }
+    return true;
+  }
+
+  async function handleLog(exercise: WorkoutExercise) {
+    await logOne(exercise);
+  }
+
+  async function handleLogAll() {
+    if (!canLogAll) {
+      return;
+    }
+    error = '';
+    for (const exercise of loggableExercises) {
+      const ok = await logOne(exercise);
+      if (!ok) {
+        return;
+      }
     }
   }
 
@@ -182,6 +212,15 @@
         />
         {/key}
       {/each}
+      <button
+        type="button"
+        class="log-all"
+        disabled={!canLogAll}
+        aria-label="Log all"
+        onclick={() => handleLogAll()}
+      >
+        Log All
+      </button>
     </div>
   {/if}
 </div>
@@ -260,5 +299,23 @@
     flex-direction: column;
     gap: 0.75rem;
     margin-top: 1rem;
+  }
+
+  .log-all {
+    width: 100%;
+    min-height: 48px;
+    margin-top: 0.25rem;
+    border: 0;
+    border-radius: 10px;
+    background: #e8a04a;
+    color: #121212;
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+
+  .log-all:disabled {
+    opacity: 0.55;
+    cursor: default;
   }
 </style>

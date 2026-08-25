@@ -151,3 +151,51 @@ export async function fetchHistory(
     return fail(0, null);
   }
 }
+
+export async function patchHistoryLog(
+  id: number,
+  input: { weight: number; reps: number },
+  fetcher: typeof fetch = fetch,
+): Promise<{ ok: true; log: HistoryLog } | ApiFail> {
+  try {
+    const { status, body } = await apiFetch(
+      `/api/logs/${id}`,
+      { method: 'PATCH', body: JSON.stringify(input) },
+      fetcher,
+    );
+    if (status !== 200) {
+      return fail(status, body);
+    }
+    const data = parseApiData(body);
+    const log = parseLog(data);
+    if (log === null) {
+      return fail(status, body);
+    }
+    return { ok: true, log };
+  } catch {
+    return fail(0, null);
+  }
+}
+
+export async function deleteHistoryLog(
+  id: number,
+  fetcher: typeof fetch = fetch,
+): Promise<{ ok: true } | ApiFail> {
+  try {
+    const { status, body } = await apiFetch(
+      `/api/logs/${id}`,
+      { method: 'DELETE', body: '{}' },
+      fetcher,
+    );
+    if (status !== 200) {
+      return fail(status, body);
+    }
+    const data = parseApiData(body);
+    if (data === null || data.ok !== true) {
+      return fail(status, body);
+    }
+    return { ok: true };
+  } catch {
+    return fail(0, null);
+  }
+}

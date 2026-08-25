@@ -3,21 +3,20 @@ import { describe, expect, it, vi } from 'vitest';
 import RepsField from './RepsField.svelte';
 
 describe('RepsField', () => {
-  it('steps by one from empty and floors at zero', async () => {
+  it('shows the entered reps without steppers', () => {
     const onChange = vi.fn();
-    const { rerender } = render(RepsField, { props: { value: null, onChange } });
+    render(RepsField, { props: { value: 8, onChange } });
     const input = screen.getByLabelText('Reps');
     expect(input).toHaveAttribute('inputmode', 'numeric');
-    expect(input).toHaveStyle({ fontSize: '16px' });
+    expect(input).toHaveStyle({ fontSize: '22px' });
+    expect(input).toHaveValue('8');
+    expect(screen.queryByRole('button', { name: 'Increase reps' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Decrease reps' })).not.toBeInTheDocument();
+  });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Increase reps' }));
-    expect(onChange).toHaveBeenCalledWith(1);
-    await rerender({ value: 1, onChange });
-    await fireEvent.click(screen.getByRole('button', { name: 'Decrease reps' }));
-    expect(onChange).toHaveBeenCalledWith(0);
-    await rerender({ value: 0, onChange });
-    await fireEvent.click(screen.getByRole('button', { name: 'Decrease reps' }));
-    expect(onChange).toHaveBeenLastCalledWith(0);
+  it('starts empty when there is no last reps', () => {
+    render(RepsField, { props: { value: null, onChange: vi.fn() } });
+    expect(screen.getByLabelText('Reps')).toHaveValue('');
   });
 
   it('accepts numeric input and clears to empty', async () => {

@@ -57,5 +57,9 @@ return static function (App $app): void {
     $app->get('/api/logs', [LogController::class, 'index']);
     $app->post('/api/logs', [LogController::class, 'create'])
         ->add($json);
+    $app->patch('/api/logs/{id}', [LogController::class, 'patch'])
+        ->add($json);
+    $app->delete('/api/logs/{id}', [LogController::class, 'delete'])
+        ->add($json);
     $app->get('/api/export', [ExportController::class, 'download']);
 };
