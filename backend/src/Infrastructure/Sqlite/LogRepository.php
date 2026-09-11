@@ -19,18 +19,18 @@ final class LogRepository
     ) {
     }
 
-    public function latestForSetExercise(string $emailHash, int $setId, int $globalExerciseId): ?LogPrefill
+    public function latestForScheduleExercise(string $emailHash, int $scheduleId, int $globalExerciseId): ?LogPrefill
     {
         $pdo = $this->users->open($emailHash);
         $stmt = $pdo->prepare(
             'SELECT weight, reps
              FROM logs
-             WHERE set_id = :set_id AND global_exercise_id = :global_exercise_id
+             WHERE schedule_id = :schedule_id AND global_exercise_id = :global_exercise_id
              ORDER BY logged_at DESC, id DESC
              LIMIT 1',
         );
         $stmt->execute([
-            'set_id' => $setId,
+            'schedule_id' => $scheduleId,
             'global_exercise_id' => $globalExerciseId,
         ]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -38,35 +38,18 @@ final class LogRepository
         return $this->mapPrefill($row);
     }
 
-    public function latestForExercise(string $emailHash, int $globalExerciseId): ?LogPrefill
+    public function bestForScheduleExercise(string $emailHash, int $scheduleId, int $globalExerciseId): ?LogPrefill
     {
         $pdo = $this->users->open($emailHash);
         $stmt = $pdo->prepare(
             'SELECT weight, reps
              FROM logs
-             WHERE global_exercise_id = :global_exercise_id
-             ORDER BY logged_at DESC, id DESC
-             LIMIT 1',
-        );
-        $stmt->execute([
-            'global_exercise_id' => $globalExerciseId,
-        ]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        return $this->mapPrefill($row);
-    }
-
-    public function bestForExercise(string $emailHash, int $globalExerciseId): ?LogPrefill
-    {
-        $pdo = $this->users->open($emailHash);
-        $stmt = $pdo->prepare(
-            'SELECT weight, reps
-             FROM logs
-             WHERE global_exercise_id = :global_exercise_id
+             WHERE schedule_id = :schedule_id AND global_exercise_id = :global_exercise_id
              ORDER BY weight DESC, reps DESC, logged_at DESC, id DESC
              LIMIT 1',
         );
         $stmt->execute([
+            'schedule_id' => $scheduleId,
             'global_exercise_id' => $globalExerciseId,
         ]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);

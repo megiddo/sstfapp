@@ -168,27 +168,82 @@ final class WorkoutTest extends HttpTestCase
         $this->assertSame('Hypertrophy', $listed[0]['name']);
     }
 
-    public function testPrefillFallsBackToLastEverForExercise(): void
+    public function testLastAndBestUseSameExerciseAcrossScheduleSets(): void
     {
         $this->signIn('fb-' . bin2hex(random_bytes(4)) . '@example.com', 'America/Chicago');
         $seeded = $this->seedHypertrophyWeek();
-        $this->freezeAt('2026-08-20 07:10:00', 'America/Chicago');
 
-        $onMorning = $this->request('POST', '/api/logs', [
-            'set_id' => $seeded['morningId'],
+        $this->freezeAt('2026-08-17 18:40:00', 'America/Chicago');
+        $this->assertSame(200, $this->request('POST', '/api/logs', [
+            'set_id' => $seeded['eveningId'],
             'global_exercise_id' => $seeded['benchId'],
             'weight' => 200,
             'reps' => 5,
-        ]);
-        $this->assertSame(200, $onMorning->getStatusCode());
+        ])->getStatusCode());
 
-        $this->freezeAt('2026-08-19 18:40:00', 'America/Chicago');
-        $evening = $this->json($this->request('GET', '/api/workout/current'))['data'];
+        $this->freezeAt('2026-08-20 07:10:00', 'America/Chicago');
+        $this->assertSame(200, $this->request('POST', '/api/logs', [
+            'set_id' => $seeded['morningId'],
+            'global_exercise_id' => $seeded['benchId'],
+            'weight' => 185,
+            'reps' => 8,
+        ])->getStatusCode());
+
+        $evening = $this->json($this->request('GET', '/api/workout/current?set_id=' . $seeded['eveningId']))['data'];
         $this->assertSame('Evening', $evening['set']['name']);
-        $this->assertEquals(200, $evening['exercises'][0]['last_weight']);
-        $this->assertSame(5, $evening['exercises'][0]['last_reps']);
+        $this->assertEquals(185, $evening['exercises'][0]['last_weight']);
+        $this->assertSame(8, $evening['exercises'][0]['last_reps']);
         $this->assertEquals(200, $evening['exercises'][0]['best_weight']);
         $this->assertSame(5, $evening['exercises'][0]['best_reps']);
+
+        $morning = $this->json($this->request('GET', '/api/workout/current?set_id=' . $seeded['morningId']))['data'];
+        $this->assertSame('Morning', $morning['set']['name']);
+        $this->assertEquals(185, $morning['exercises'][0]['last_weight']);
+        $this->assertSame(8, $morning['exercises'][0]['last_reps']);
+        $this->assertEquals(200, $morning['exercises'][0]['best_weight']);
+        $this->assertSame(5, $morning['exercises'][0]['best_reps']);
+    }
+
+    public function testLastAndBestIgnoreOtherSchedules(): void
+    {
+        $this->signIn('scope-' . bin2hex(random_bytes(4)) . '@example.com', 'America/Chicago');
+        $seeded = $this->seedHypertrophyWeek();
+
+        $other = $this->json($this->request('POST', '/api/schedules', ['name' => 'Strength']))['data'];
+        $otherSet = $this->json($this->request('POST', '/api/schedules/' . $other['id'] . '/sets', [
+            'name' => 'Heavy',
+            'day_of_week' => 1,
+            'start_minutes' => 480,
+        ]))['data'];
+        $this->request('PUT', '/api/sets/' . $otherSet['id'] . '/exercises', [
+            'exercises' => [
+                ['global_exercise_id' => $seeded['benchId']],
+            ],
+        ]);
+        $this->request('POST', '/api/schedules/' . $other['id'] . '/activate', []);
+
+        $this->freezeAt('2026-08-17 08:00:00', 'America/Chicago');
+        $this->assertSame(200, $this->request('POST', '/api/logs', [
+            'set_id' => $otherSet['id'],
+            'global_exercise_id' => $seeded['benchId'],
+            'weight' => 315,
+            'reps' => 1,
+        ])->getStatusCode());
+
+        $this->request('POST', '/api/schedules/' . $seeded['scheduleId'] . '/activate', []);
+        $this->freezeAt('2026-08-19 18:40:00', 'America/Chicago');
+        $this->assertSame(200, $this->request('POST', '/api/logs', [
+            'set_id' => $seeded['eveningId'],
+            'global_exercise_id' => $seeded['benchId'],
+            'weight' => 185,
+            'reps' => 8,
+        ])->getStatusCode());
+
+        $current = $this->json($this->request('GET', '/api/workout/current?set_id=' . $seeded['eveningId']))['data'];
+        $this->assertEquals(185, $current['exercises'][0]['last_weight']);
+        $this->assertSame(8, $current['exercises'][0]['last_reps']);
+        $this->assertEquals(185, $current['exercises'][0]['best_weight']);
+        $this->assertSame(8, $current['exercises'][0]['best_reps']);
     }
 
     public function testBestPrefersHeavierWeightThenHigherReps(): void
