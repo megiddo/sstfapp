@@ -154,11 +154,8 @@ final class WorkoutService
             $prefill = null;
             $best = null;
             if ($exercise->globalExerciseId !== null) {
-                $prefill = $this->logs->latestForSetExercise($emailHash, $set->id, $exercise->globalExerciseId);
-                if ($prefill === null) {
-                    $prefill = $this->logs->latestForExercise($emailHash, $exercise->globalExerciseId);
-                }
-                $best = $this->logs->bestForExercise($emailHash, $exercise->globalExerciseId);
+                $prefill = $this->logs->latestForScheduleExercise($emailHash, $set->scheduleId, $exercise->globalExerciseId);
+                $best = $this->logs->bestForScheduleExercise($emailHash, $set->scheduleId, $exercise->globalExerciseId);
             }
             $out[] = [
                 'id' => $exercise->id,

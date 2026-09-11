@@ -16,7 +16,7 @@ Opening the app:
 
 1. Load the active schedule.
 2. Select the set whose start day/time is closest to now (user timezone).
-3. Show that set. Prefill each exercise with the last logged weight and reps for that exercise in that set. Also show the best (heaviest, then most reps) for that exercise.
+3. Show that set. Prefill each exercise with the last logged weight and reps for that exercise anywhere in the active schedule. Also show the best (heaviest, then most reps) for that exercise in the same schedule.
 4. The user may switch to a different set in the active schedule.
 5. Saving weight + reps writes an immutable **log** row (schedule, set, exercise, weight, reps, timestamp).
 
@@ -223,11 +223,10 @@ When a log is written, snapshot schedule name, set name/day/time, exercise name/
 
 Last-value prefills:
 
-1. Latest log for `(set_id, global_exercise_id)`.
-2. Else latest log for `global_exercise_id` anywhere.
-3. Else empty weight, reps blank.
+1. Latest log for `(schedule_id, global_exercise_id)` across every set in the active schedule.
+2. Else empty weight, reps blank.
 
-Best (display only, does not prefill): heaviest `weight` for that `global_exercise_id`, then highest `reps`. Tie-break later `logged_at`, then higher `id`.
+Best (display only, does not prefill): heaviest `weight` for that `(schedule_id, global_exercise_id)`, then highest `reps`. Tie-break later `logged_at`, then higher `id`. Other schedules do not count.
 
 ## 5. Closest-set algorithm
 

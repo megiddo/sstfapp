@@ -202,7 +202,7 @@ Then that schedule is active and the set has two denormalized exercises.
 
 Given the active schedule has Wed 18:00 Evening and Thu 07:00 Morning  
 When it is Wednesday 18:40 in the user’s timezone  
-Then Workout shows Evening, fields prefilled from the last Evening log for each exercise (or last-ever if none for that set). The card also shows Best for that exercise (heaviest weight, then most reps).
+Then Workout shows Evening, fields prefilled from the last log for each exercise anywhere in the active schedule. The card also shows Best for that exercise in the same schedule (heaviest weight, then most reps).
 
 ### F4 — Log one exercise
 
